@@ -1,5 +1,5 @@
-#include "component.hpp"
-#include "colors.hpp"
+#include "tui/component.hpp"
+#include "tui/colors.hpp"
 #include <cstddef>
 #include <fmt/base.h>
 #include <termios.h>

@@ -1,14 +1,12 @@
-#include <cstddef>
-#include <ctime>
 #include <fmt/base.h>
 #include <fmt/color.h>
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 
-#include "screen.hpp"
-#include "cell.hpp"
-#include "colors.hpp"
+#include "tui/screen.hpp"
+#include "tui/cell.hpp"
+#include "tui/colors.hpp"
 
 size_t Tui::Screen::m_rows = 0;
 size_t Tui::Screen::m_cols = 0;
