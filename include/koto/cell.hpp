@@ -1,9 +1,9 @@
 #pragma once
 #include <cstdint>
+#include "color.hpp"
 
-namespace eztui {
+namespace koto {
 
-    static constexpr uint32_t COLOR_DEFAULT = 0xFF000000;
     struct Cell {
         char32_t ch = U' ';
         uint32_t fg = COLOR_DEFAULT;

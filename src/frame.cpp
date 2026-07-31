@@ -1,25 +1,25 @@
-#include "eztui/frame.hpp"
-#include "eztui/cell.hpp"
-#include "eztui/layout.hpp"
-#include "eztui/terminal.hpp"
+#include "koto/frame.hpp"
+#include "koto/cell.hpp"
+#include "koto/layout.hpp"
+#include "koto/terminal.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <unistd.h>
 #include <vector>
 
-namespace eztui
+namespace koto
 {
 
-    Frame::Frame(Terminal &t): 
-    term(t),
-    m_cols(term.get_cols()), 
-    m_rows(term.get_rows()),
+    Frame::Frame(Terminal &t):
+    m_term(t), 
+    m_cols(m_term.get_cols()), 
+    m_rows(m_term.get_rows()),
     m_front_buffer(m_cols * m_rows, Cell{}),
     m_back_buffer(m_cols * m_rows, Cell{})
     {}
     
-    void Frame::set_cell(uint32_t row, uint32_t col, Cell c)
+    auto Frame::set_cell(uint32_t row, uint32_t col, Cell c) -> void
     {
 
         if (row >= m_rows || col >= m_cols) return;
@@ -27,14 +27,14 @@ namespace eztui
 
     }
 
-    void Frame::clear_back_buffer()
+    auto Frame::clear_back_buffer() -> void
     {
 
         std::fill(m_back_buffer.begin(), m_back_buffer.end(), Cell{});
 
     }
 
-    void Frame::move_cursor(uint32_t row, uint32_t col)
+    auto Frame::move_cursor(uint32_t row, uint32_t col) const -> void
     {
 
         char buf[32];
@@ -43,10 +43,10 @@ namespace eztui
 
     }
 
-    void Frame::paint_cell(uint32_t row, uint32_t col, Cell c) 
+    auto Frame::paint_cell(uint32_t row, uint32_t col, Cell c) -> void
     {
 
-        char buf[128] = {};
+        char buf[256] = {};
         int  offset  = 0;
 
         if (c.fg != COLOR_DEFAULT)
@@ -58,6 +58,12 @@ namespace eztui
             offset += snprintf(buf + offset, sizeof(buf) - offset,
                             "\033[38;2;%u;%u;%um", r, g, b);
         }
+        else
+        {
+            // reset foreground color
+            offset += snprintf(buf + offset, sizeof(buf) - offset,
+                            "\033[39m");    
+        }
 
         if (c.bg != COLOR_DEFAULT)
         {
@@ -68,7 +74,12 @@ namespace eztui
             offset += snprintf(buf + offset, sizeof(buf) - offset,
                             "\033[48;2;%u;%u;%um", r, g, b);
         }
-
+        else
+        {
+            // reset background color
+            offset += snprintf(buf + offset, sizeof(buf) - offset,
+                            "\033[49m");    
+        }
         char utf8[5] = {};
         uint32_t cp = c.ch;
 
@@ -96,7 +107,7 @@ namespace eztui
         write(STDOUT_FILENO, buf, offset);
     }
 
-    void Frame::render()
+    auto Frame::render() -> void
     {
 
         for(uint32_t r = 0; r < m_rows; r++)
@@ -115,7 +126,22 @@ namespace eztui
         fflush(stdout);
     }
 
-    Rect Frame::area(){
+    auto Frame::area() const -> Area
+    {
         return {0,0,m_cols,m_rows};
+    }
+
+    auto Frame::handle_resize(uint32_t rows, uint32_t cols) -> void
+    {
+        if (rows < 3 || cols < 8)
+        {
+            return;
+        }
+        m_rows = rows;
+        m_cols = cols;
+        Cell def;
+        def.ch = U'\xFF';
+        m_front_buffer.assign(rows * cols, def);
+        m_back_buffer.assign(rows * cols, def);
     }
 }

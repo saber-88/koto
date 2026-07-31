@@ -4,3 +4,6 @@
 #include "layout.hpp"
 #include "widget.hpp"
 #include "box.hpp"
+#include "event.hpp"
+#include "text.hpp"
+#include "color.hpp"

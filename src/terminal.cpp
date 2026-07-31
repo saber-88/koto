@@ -1,65 +1,67 @@
-#include "eztui/terminal.hpp"
+#include "koto/terminal.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <termios.h>
 #include <unistd.h>
-#include <fmt/base.h>
 #include <sys/ioctl.h>
 
-namespace eztui 
+namespace koto 
 {
 
-    void Terminal::enter_raw_mode()
+    auto Terminal::enter_raw_mode() -> void
     {
 
         tcgetattr(STDIN_FILENO, &og_terminal);
         struct termios raw = og_terminal;
-        raw.c_lflag &= ~(ECHO | ICANON );
+        raw.c_lflag &= ~(ECHO | ICANON | ISIG );
+        raw.c_iflag &= ~(IXON);
         tcsetattr(STDIN_FILENO, TCSANOW, &raw); 
         std::fflush(stdout);
-        
+
     }
 
-    void Terminal::restore_terminal()
+    auto Terminal::restore_terminal() -> void
     {
         
         tcsetattr(STDIN_FILENO, TCSANOW, &og_terminal);
+        show_cursor();
+        exit_alt_screen();
         std::fflush(stdout);
         
     }
 
-    void Terminal::enter_alt_creen()
+    auto Terminal::enter_alt_screen() -> void
     {
         
-        fmt::print("\033[?1049h");
+        write(STDOUT_FILENO, "\033[?1049h", 8);
         std::fflush(stdout);
         
     }
 
-    void Terminal::exit_alt_Screen()
+    auto Terminal::exit_alt_screen() -> void
     {
         
-        fmt::print("\033[?1049l");
+        write(STDOUT_FILENO, "\033[?1049l", 8);
         std::fflush(stdout);
     }
 
-    void Terminal::show_cursor()
+    auto Terminal::show_cursor() const -> void
     {
 
-        fmt::print("\033[?25h");
+        write(STDOUT_FILENO, "\033[?25h", 6);
         std::fflush(stdout);
-
+        
     }
-
-    void Terminal::hide_cursor()
+    
+    auto Terminal::hide_cursor() const -> void
     {
-
-        fmt::print("\033[?25l");
+        
+        write(STDOUT_FILENO, "\033[?25l", 6);
         std::fflush(stdout);
 
     }
 
-    void Terminal::set_dimensions()
+    auto Terminal::set_dimensions() -> void
     {
 
         struct winsize w;
@@ -78,27 +80,25 @@ namespace eztui
         
         set_dimensions();
         enter_raw_mode();
-        enter_alt_creen();
+        enter_alt_screen();
         
     }
 
     Terminal::~Terminal()
     {
 
-        show_cursor();
-        exit_alt_Screen();
         restore_terminal();
 
     }
 
-    uint32_t Terminal::get_rows() const
+    auto Terminal::get_rows() const -> uint32_t
     {
 
         return m_rows;
 
     }
 
-    uint32_t Terminal::get_cols() const
+    auto Terminal::get_cols() const -> uint32_t
     {
 
         return m_cols;
