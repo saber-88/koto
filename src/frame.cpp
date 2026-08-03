@@ -133,10 +133,6 @@ namespace koto
 
     auto Frame::handle_resize(uint32_t rows, uint32_t cols) -> void
     {
-        if (rows < 3 || cols < 8)
-        {
-            return;
-        }
         m_rows = rows;
         m_cols = cols;
         Cell def;

@@ -73,7 +73,7 @@ namespace koto
 
     auto EventLoop::poll(std::int32_t timeout_ms) -> Event
     {
-        // return m_queue.pop(timeout_ms);
+        
         struct pollfd pfds[2] =
         {
             {STDIN_FILENO, POLLIN,0},
