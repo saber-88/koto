@@ -13,6 +13,8 @@ add_library(koto
     src/event.cpp
     src/color.cpp
     src/text.cpp
+    src/vbox.cpp
+    src/hbox.cpp
 )
 
 target_include_directories(koto PUBLIC include)

@@ -3,8 +3,6 @@
 #include "koto/frame.hpp"
 #include "koto/layout.hpp"
 #include <cstdint>
-#include <cstdio>
-#include <print>
 #include <string>
 #include <string_view>
 #include <unistd.h>
