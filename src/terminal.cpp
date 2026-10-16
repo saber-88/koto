@@ -1,5 +1,5 @@
 #include "koto/terminal.hpp"
-#include <cstdint>
+#include <clocale>
 #include <cstdio>
 #include <termios.h>
 #include <unistd.h>
@@ -10,11 +10,11 @@ namespace koto
 
     auto Terminal::enter_raw_mode() -> void
     {
-
+        std::setlocale(LC_ALL,"");
         tcgetattr(STDIN_FILENO, &og_terminal);
         struct termios raw = og_terminal;
-        raw.c_lflag &= ~(ECHO | ICANON | ISIG );
-        raw.c_iflag &= ~(IXON);
+        raw.c_lflag &= ~static_cast<tcflag_t>((ECHO | ICANON | ISIG ));
+        raw.c_iflag &= ~static_cast<tcflag_t>((IXON));
         tcsetattr(STDIN_FILENO, TCSANOW, &raw); 
         std::fflush(stdout);
 
@@ -72,6 +72,12 @@ namespace koto
             m_cols = w.ws_col;
 
         }
+        else
+        {
+            // sensible fallback when not attached to a terminal
+            m_rows = 24;
+            m_cols = 80;
+        }
 
     }
 
@@ -91,14 +97,14 @@ namespace koto
 
     }
 
-    auto Terminal::get_rows() const -> uint32_t
+    auto Terminal::get_rows() const -> int
     {
 
         return m_rows;
 
     }
 
-    auto Terminal::get_cols() const -> uint32_t
+    auto Terminal::get_cols() const -> int
     {
 
         return m_cols;

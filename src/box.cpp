@@ -2,6 +2,9 @@
 #include "koto/color.hpp"
 #include "koto/frame.hpp"
 #include "koto/layout.hpp"
+#include "koto/text.hpp"
+#include "koto/utf8.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -32,6 +35,26 @@ namespace koto
         m_title_bg = parse_color(bg);
         return *this;
     }
+    Box& Box::fg(uint32_t fg)
+    {
+        m_fg = fg;
+        return *this;
+    }
+    Box& Box::bg(uint32_t bg)
+    {
+        m_bg = bg;
+        return *this;
+    }
+    Box& Box::title_fg(uint32_t fg)
+    {
+        m_title_fg = fg;
+        return *this;
+    }
+    Box& Box::title_bg(uint32_t bg)
+    {
+        m_title_bg = bg;
+        return *this;
+    }
 
     Box& Box::filled(bool fill)
     {
@@ -57,15 +80,21 @@ namespace koto
         return *this;
     }
 
+    Box& Box::title_align(TitleAlign align)
+    {
+        m_title_align = align;
+        return *this;
+    }
+
 
     void Box::draw(Frame& frame, Area area)
     {
         if(!area.is_valid()) return;
 
-        uint32_t row = area.row;
-        uint32_t col = area.col;
-        uint32_t right = area.right();
-        uint32_t bottom = area.bottom();
+        int row = area.row;
+        int col = area.col;
+        int right = area.right();
+        int bottom = area.bottom();
 
         char32_t top_left;
         char32_t top_right;
@@ -129,11 +158,20 @@ namespace koto
             }
         }
 
-        for (uint32_t r = row; r < bottom; r++)
+        for (int r = row; r < bottom; r++)
         {
-            for (uint32_t c = col; c < right; c++)
+            for (int c = col; c < right; c++)
             {
-                if (r == row && c == col)
+                bool on_top    = (r == row);
+                bool on_bottom = (r == bottom - 1);
+                bool on_left   = (c == col);
+                bool on_right  = (c == right - 1);
+                bool on_border = on_top || on_bottom || on_left || on_right;
+
+                // skip interior cells when not filled
+                if (!on_border && !m_filled) continue;
+
+                if (on_top && on_left)
                 {
                     if (!m_borders.left) {
                         frame.set_cell(r, c, {horizontal,m_fg,m_bg});
@@ -141,7 +179,7 @@ namespace koto
                     }
                     frame.set_cell(r, c, {top_left,m_fg,m_bg});
                 }
-                else if (r == row && c == right - 1)
+                else if (on_top && on_right)
                 {
                     if (!m_borders.right) {
                         frame.set_cell(r, c, {horizontal,m_fg,m_bg});
@@ -150,7 +188,7 @@ namespace koto
                     frame.set_cell(r, c, {top_right,m_fg,m_bg});
                     
                 }
-                else if (r == bottom - 1 && c == col)
+                else if (on_bottom && on_left)
                 {
                     if (!m_borders.left) {
                         frame.set_cell(r, c, {horizontal,m_fg,m_bg});
@@ -159,7 +197,7 @@ namespace koto
                     frame.set_cell(r, c, {bottom_left,m_fg,m_bg});
                     
                 }
-                else if (r == bottom - 1 && c == right - 1)
+                else if (on_bottom && on_right)
                 {
                     if (!m_borders.right) {
                         frame.set_cell(r, c, {horizontal,m_fg,m_bg});
@@ -170,8 +208,8 @@ namespace koto
                 }
                 else if 
                 (
-                    (r == row) && 
-                    (c != col && c != right - 1) &&
+                    on_top && 
+                    !on_left && !on_right &&
                     m_borders.top
                 )
                 {
@@ -180,8 +218,8 @@ namespace koto
                 }
                 else if 
                 (
-                    (r == bottom - 1) && 
-                    (c != col && c != right - 1) &&
+                    on_bottom && 
+                    !on_left && !on_right &&
                     m_borders.bottom
                 )
                 {
@@ -190,8 +228,8 @@ namespace koto
                 }
                 else if 
                 (
-                    (c == col) && 
-                    (r != row && r != bottom - 1) &&
+                    on_left && 
+                    !on_top && !on_bottom &&
                     m_borders.left
                 )
                 {
@@ -200,8 +238,8 @@ namespace koto
                 }
                 else if 
                 (
-                    (c == right - 1) && 
-                    (r != row && r != bottom - 1) &&
+                    on_right && 
+                    !on_top && !on_bottom &&
                     m_borders.right
                 )
                 {
@@ -218,18 +256,28 @@ namespace koto
             }
         }
 
-        if ((!m_title.empty()) && (m_title.size() < area.width))
+        if ((!m_title.empty()) && (text_width(m_title) + 4 <= area.width))
         {
-            uint32_t center_col = area.col + (area.width - m_title.size()) / 2;
-
-            frame.set_cell(row, center_col - 1, {U' ',m_title_fg,m_title_bg});
-            for (int i = 0; i < m_title.size(); i++)
+            int title_width = text_width(m_title);
+            int title_col = area.col + 3;
+            if (m_title_align == TitleAlign::Center)
             {
-
-                frame.set_cell(row, center_col + i, {(char32_t)m_title[i],m_title_fg,m_title_bg});
+                title_col = area.col + (area.width - title_width) / 2;
             }
-            frame.set_cell(row, center_col + m_title.size(), {U' ',m_title_fg,m_title_bg});
-            
+            else if (m_title_align == TitleAlign::Right)
+            {
+                title_col = area.right() - title_width - 2;
+            }
+
+            frame.set_cell(row, title_col - 1, {U' ', m_title_fg, m_title_bg});
+            Area textArea = {
+                row,
+                title_col,
+                title_width,
+                1
+            };
+            Text(m_title).bg(m_title_bg).fg(m_title_fg).draw(frame, textArea);
+            frame.set_cell(row, title_col + title_width, {U' ', m_title_fg, m_title_bg});
         }
 
     }

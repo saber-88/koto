@@ -1,10 +1,10 @@
 #include "koto/layout.hpp"
-#include <cstdint>
+#include <algorithm>
 #include <vector>
 
 namespace koto
 {
-    auto Layout::vertical(Area area, std::vector<Constraint> constraints)
+    auto Layout::vertical(Area area, const std::vector<Constraint>& constraints)
         -> std::vector<Area>
     {
         if(!area.is_valid())
@@ -12,8 +12,8 @@ namespace koto
             return std::vector<Area>(constraints.size(),Area{area.row,area.col,0,0});
         }
         std::vector<Area> layout;
-        uint32_t fill_count = 0;
-        uint32_t used = 0;
+        int fill_count = 0;
+        int used = 0;
         
         for (auto c: constraints)
         {
@@ -37,10 +37,12 @@ namespace koto
             }
 
         }
+        int remaining = std::max(0,area.height - used);
+        int fill_size = (fill_count > 0) ? remaining / fill_count : 0;
+        int fill_remainder = (fill_count > 0) ? remaining % fill_count : 0;
 
-        uint32_t fill_size = (fill_count > 0) ? (area.height - used) / fill_count : 0;
-
-        uint32_t current_row = area.row;
+        int current_row = area.row;
+        int fill_idx = 0;
 
         for (auto c : constraints)
         {
@@ -55,7 +57,8 @@ namespace koto
                 }
                 case Constraint::Type::Fill :
                 {
-                    rect.height = fill_size;
+                    rect.height = fill_size + (fill_idx < fill_remainder ? 1 : 0);
+                    fill_idx++;
                     break;
                 }
                 case Constraint::Type::Percent :
@@ -64,14 +67,15 @@ namespace koto
                     break;
                 }
             }
+            int max_possible_h = std::max(0, area.bottom() - current_row);
+            rect.height = std::min(rect.height, max_possible_h);
             current_row += rect.height;
             layout.emplace_back(rect);
-
         }
         return layout;
     }
 
-    auto Layout::horizontal(Area area, std::vector<Constraint> constraints)
+    auto Layout::horizontal(Area area, const std::vector<Constraint>& constraints)
         -> std::vector<Area>
     {
         if(!area.is_valid())
@@ -79,8 +83,8 @@ namespace koto
             return std::vector<Area>(constraints.size(),Area{area.row,area.col,0,0});
         }
         std::vector<Area> layout;
-        uint32_t fill_count = 0;
-        uint32_t used = 0;
+        int fill_count = 0;
+        int used = 0;
         
         for (auto c: constraints)
         {
@@ -105,16 +109,16 @@ namespace koto
 
         }
 
-        uint32_t fill_size = (fill_count > 0) ? (area.width - used) / fill_count : 0;
+        int remaining = std::max(0,area.width - used);
+        int fill_size = (fill_count > 0) ? remaining / fill_count : 0;
+        int fill_remainder = (fill_count > 0) ? remaining % fill_count : 0;
 
-        uint32_t current_col = area.col;
+        int current_col = area.col;
+        int fill_idx = 0;
 
         for (auto c : constraints)
         {
             Area rect(area.row,current_col,area.width,area.height);
-            rect.row = area.row;
-            rect.height = area.height;
-            rect.col = current_col;
 
             switch (c.type) {
                 case Constraint::Type::Fixed :
@@ -125,7 +129,8 @@ namespace koto
                 }
                 case Constraint::Type::Fill :
                 {   
-                    rect.width = fill_size;
+                    rect.width = fill_size + (fill_idx < fill_remainder ? 1 : 0);
+                    fill_idx++;
                     break;
                 }
                 case Constraint::Type::Percent :
@@ -134,20 +139,25 @@ namespace koto
                     break;
                 }
             }
+            int max_possible_w = std::max(0, area.right() - current_col);
+            rect.width = std::min(rect.width, max_possible_w);
             current_col += rect.width;
             layout.emplace_back(rect);
         }
         return layout;
     }
 
-    auto Layout::center(Area area, uint32_t width, uint32_t height) -> Area
+    auto Layout::center(Area area, int width, int height) -> Area
     {
         if(!area.is_valid())
         {
             return {area.row,area.col,0,0};
         }
-        uint32_t r = area.row + ( area.height - height) / 2;
-        uint32_t c = area.col + (area.width - width) / 2;
+        int r = area.row + ( area.height - height) / 2;
+        int c = area.col + (area.width - width) / 2;
+
+        r = (r < 0) ? 0 : r;
+        c = (c < 0) ? 0 : c;
 
         return {r,c,width,height};
     }

@@ -1,6 +1,7 @@
 #include "koto/hbox.hpp"
 #include "koto/frame.hpp"
 #include "koto/layout.hpp"
+#include <cstddef>
 #include <memory>
 #include <vector>
 
@@ -19,7 +20,7 @@ namespace koto
 
         auto rect = Layout::horizontal(area, constraints);
 
-        for (int i {0}; i < m_children.size(); i++)
+        for (size_t i {0}; i < m_children.size(); i++)
         {
             m_children[i].widget->draw(frame, rect[i]);
         }

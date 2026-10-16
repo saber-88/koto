@@ -3,7 +3,7 @@
 #include "koto/widget.hpp"
 #include <cstdint>
 #include <string>
-#include "color.hpp"
+#include "koto/color.hpp"
 
 namespace koto
 {   
@@ -14,6 +14,13 @@ namespace koto
         Double,   // ═ ║ ╔ ╗ ╚ ╝
         Rounded,  // ─ │ ╭ ╮ ╰ ╯
         Thick,    // ━ ┃ ┏ ┓ ┗ ┛
+    };
+
+    enum class TitleAlign
+    {
+        Left,
+        Center,
+        Right,
     };
 
     struct Borders
@@ -31,10 +38,15 @@ namespace koto
             Box& bg(std::string_view bg);
             Box& title_fg(std::string_view fg);
             Box& title_bg(std::string_view bg);
+            Box& fg(uint32_t fg);
+            Box& bg(uint32_t bg);
+            Box& title_fg(uint32_t fg);
+            Box& title_bg(uint32_t bg);
             Box& filled(bool fill);
             Box& border_style(BorderStyle style);
             Box& borders(Borders borders);
             Box& title(std::string title);
+            Box& title_align(TitleAlign align);
             void draw(Frame& frame, Area area) override;
 
         private:
@@ -45,5 +57,6 @@ namespace koto
             BorderStyle m_style = BorderStyle::Single;
             struct Borders m_borders;
             std::string m_title = "";
+            TitleAlign m_title_align = TitleAlign::Center;
     };
 }

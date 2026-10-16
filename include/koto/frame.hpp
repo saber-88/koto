@@ -3,7 +3,7 @@
 #include "koto/cell.hpp"
 #include "koto/layout.hpp"
 #include "koto/terminal.hpp"
-#include <cstdint>
+#include <string>
 #include <vector>
 
 namespace koto
@@ -11,23 +11,37 @@ namespace koto
     class Frame
     {
 
-        private:
-
-            Terminal& m_term;
-            uint32_t m_cols , m_rows;
-            std::vector<Cell> m_front_buffer;
-            std::vector<Cell> m_back_buffer;
-            auto move_cursor(uint32_t row, uint32_t col) const -> void;
-            auto paint_cell(uint32_t row, uint32_t col, Cell c) -> void;
-
         public:
+        
+            Frame(Terminal& t);
+            Frame(int rows, int cols);
+            ~Frame() = default;
 
-            auto handle_resize(uint32_t rows, uint32_t cols) -> void;
-            auto set_cell(uint32_t row, uint32_t col, Cell c) -> void;
+            auto handle_resize(int rows, int cols) -> void;
+            auto set_cell(int row, int col, Cell c) -> void;
+            auto get_cell(int row, int col) const -> Cell;
             auto clear_back_buffer() -> void;
             auto render() -> void;
+            auto set_cursor(int row, int col) -> void;
             auto area() const -> Area;
-            Frame(Terminal& t);
-            ~Frame() = default;
+
+            // Snapshot testing & inspection
+            auto to_plain_text() const -> std::string;
+            auto to_plain_text_row(int r) const -> std::string;
+            
+        private:
+
+            Terminal* m_term = nullptr;
+            int m_rows , m_cols;
+            std::vector<Cell> m_front_buffer;
+            std::vector<Cell> m_back_buffer;
+            std::string m_output;              // output buffer for batched write
+            uint32_t m_cur_fg = COLOR_DEFAULT;  // tracked SGR fg
+            uint32_t m_cur_bg = COLOR_DEFAULT;  // tracked SGR bg
+            bool m_cursor_visible = false;
+            int m_cursor_row = -1;
+            int m_cursor_col = -1;
+            auto move_cursor(int row, int col) -> void;
+            auto paint_cell(Cell c) -> void;
     };
 }

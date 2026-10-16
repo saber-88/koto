@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(eztui VERSION 1.0 LANGUAGES CXX)
+project(koto VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
@@ -15,10 +15,24 @@ add_library(koto
     src/text.cpp
     src/vbox.cpp
     src/hbox.cpp
+    src/list.cpp
+    src/utf8.cpp
+    src/text_input.cpp
+    src/app.cpp
 )
 
 target_include_directories(koto PUBLIC include)
-target_compile_options(koto PRIVATE -Wall)
+target_compile_options(koto PRIVATE 
+    -Wall
+    -Werror
+    -Wextra
+    -Wpedantic
+    -Wconversion
+    -Wsign-conversion
+    -Wsign-compare
+    -Wshadow
+    -Wold-style-cast
+)
 
 # Main app
 add_executable(kotoapp test/main.cpp)

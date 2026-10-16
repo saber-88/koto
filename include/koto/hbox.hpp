@@ -1,7 +1,7 @@
 #pragma once
 
-#include "layout.hpp"
-#include "widget.hpp"
+#include "koto/layout.hpp"
+#include "koto/widget.hpp"
 #include <memory>
 #include <vector>
 

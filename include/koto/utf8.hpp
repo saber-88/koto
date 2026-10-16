@@ -1,40 +1,12 @@
 #pragma once
 
-#include <cstdint>
+#include <string_view>
 namespace koto
 {
 
-    inline auto next_codepoint(const char*& ptr, const char* end) -> char32_t {
-        uint8_t byte = (uint8_t)*ptr;
+    char32_t next_codepoint(const char*& ptr, const char* end);
+    int encode_utf8(char32_t code , char*);
 
-        if (byte < 0x80) {
-            // single byte — ASCII
-            ptr += 1;
-            return byte;
-        }
-        else if (byte < 0xE0) {
-            // 2 bytes
-            char32_t cp = (byte & 0x1F) << 6;
-            cp |= ((uint8_t)ptr[1] & 0x3F);
-            ptr += 2;
-            return cp;
-        }
-        else if (byte < 0xF0) {
-            // 3 bytes
-            char32_t cp = (byte & 0x0F) << 12;
-            cp |= ((uint8_t)ptr[1] & 0x3F) << 6;
-            cp |= ((uint8_t)ptr[2] & 0x3F);
-            ptr += 3;
-            return cp;
-        }
-        else {
-            // 4 bytes
-            char32_t cp = (byte & 0x07) << 18;
-            cp |= ((uint8_t)ptr[1] & 0x3F) << 12;
-            cp |= ((uint8_t)ptr[2] & 0x3F) << 6;
-            cp |= ((uint8_t)ptr[3] & 0x3F);
-            ptr += 4;
-            return cp;
-        }
-    }
+    int codepoint_width(char32_t cp);
+    int text_width(std::string_view text);
 }

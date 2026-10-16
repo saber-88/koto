@@ -1,4 +1,6 @@
 #include "koto/color.hpp"
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <string_view>
@@ -17,9 +19,10 @@ namespace koto
             color.remove_prefix(1);
         }
 
-        char buf[7];
-        color.copy(buf,color.size());
-
+        char buf[8] = {};
+        size_t n = std::min(sizeof(buf) - 1,color.size());
+        color.copy(buf,n);
+        buf[n] = '\0';
         return static_cast<uint32_t>(std::strtoul(buf,nullptr,16));
     }
 }

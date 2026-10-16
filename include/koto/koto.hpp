@@ -1,4 +1,5 @@
 #pragma once
+#include "frame.hpp"
 #include "cell.hpp"
 #include "terminal.hpp"
 #include "layout.hpp"
@@ -7,3 +8,9 @@
 #include "event.hpp"
 #include "text.hpp"
 #include "color.hpp"
+#include "vbox.hpp"
+#include "hbox.hpp"
+#include "list.hpp"
+#include "text_input.hpp"
+#include "utf8.hpp"
+#include "app.hpp"

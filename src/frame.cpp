@@ -2,9 +2,13 @@
 #include "koto/cell.hpp"
 #include "koto/layout.hpp"
 #include "koto/terminal.hpp"
+#include "koto/utf8.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <string>
 #include <unistd.h>
 #include <vector>
 
@@ -12,118 +16,203 @@ namespace koto
 {
 
     Frame::Frame(Terminal &t):
-    m_term(t), 
-    m_cols(m_term.get_cols()), 
-    m_rows(m_term.get_rows()),
-    m_front_buffer(m_cols * m_rows, Cell{}),
-    m_back_buffer(m_cols * m_rows, Cell{})
+    m_term(&t), 
+    m_rows(m_term->get_rows()),
+    m_cols(m_term->get_cols()), 
+    m_front_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
+    m_back_buffer(static_cast<size_t>(m_cols * m_rows), Cell{})
     {}
-    
-    auto Frame::set_cell(uint32_t row, uint32_t col, Cell c) -> void
+
+    Frame::Frame(int rows, int cols):
+    m_term(nullptr),
+    m_rows(rows < 0 ? 0 : rows),
+    m_cols(cols < 0 ? 0 : cols),
+    m_front_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
+    m_back_buffer(static_cast<size_t>(m_cols * m_rows), Cell{})
+    {}
+
+    auto Frame::get_cell(int row, int col) const -> Cell
     {
+        if (row < 0 || row >= m_rows || col < 0 || col >= m_cols)
+        {
+            return Cell{};
+        }
+        return m_back_buffer[static_cast<size_t>(row * m_cols + col)];
+    }
+    
+    auto Frame::set_cell(int row, int col, Cell c) -> void
+    {
+        if (row >= m_rows || col >= m_cols || row < 0 || col < 0) return;
 
-        if (row >= m_rows || col >= m_cols) return;
-        m_back_buffer[m_cols * row + col] = c;
+        size_t idx = static_cast<size_t>(m_cols * row + col);
 
+
+        if (col > 0 && m_back_buffer[idx].continuation)
+        {
+            size_t owner = idx - 1;
+            m_back_buffer[owner].ch = U' ';
+            m_back_buffer[owner].width = 1;
+        }
+
+        if (m_back_buffer[idx].width == 2 && col + 1 < m_cols)
+        {
+            m_back_buffer[idx + 1] = Cell{};
+        }
+
+        int w = codepoint_width(c.ch);
+        if (w == 2 && col + 1 >= m_cols) { c.ch = U' '; w = 1; }
+
+        c.width = w;
+        if (w == 2)
+        {
+            m_back_buffer[idx + 1] = Cell{.continuation = true};
+        }
+        m_back_buffer[idx] = c;
+    }
+
+    auto Frame::set_cursor(int row, int col) -> void
+    {
+        m_cursor_visible = true;
+        m_cursor_row = row;
+        m_cursor_col = col;
     }
 
     auto Frame::clear_back_buffer() -> void
     {
 
         std::fill(m_back_buffer.begin(), m_back_buffer.end(), Cell{});
+        m_cursor_visible = false;
+        m_cursor_row = -1;
+        m_cursor_col = -1;
 
     }
 
-    auto Frame::move_cursor(uint32_t row, uint32_t col) const -> void
+    auto Frame::move_cursor(int row, int col) -> void
     {
 
         char buf[32];
-        int n = snprintf(buf, sizeof(buf), "\033[%u;%uH", row + 1, col + 1);
-        write(STDOUT_FILENO, buf, n);
+        int n = snprintf(buf, sizeof(buf), "\033[%d;%dH", row + 1, col + 1);
+        m_output.append(buf, static_cast<size_t>(n));
 
     }
 
-    auto Frame::paint_cell(uint32_t row, uint32_t col, Cell c) -> void
+    auto Frame::paint_cell(Cell c) -> void
     {
 
-        char buf[256] = {};
+        char buf[64] = {};
         int  offset  = 0;
 
-        if (c.fg != COLOR_DEFAULT)
+        // only emit fg SGR when color actually changes
+        if (c.fg != m_cur_fg)
         {
+            if (c.fg != COLOR_DEFAULT)
+            {
+                uint8_t r = (c.fg >> 16) & 0xFF;
+                uint8_t g = (c.fg >> 8)  & 0xFF;
+                uint8_t b = (c.fg)       & 0xFF;
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                "\033[38;2;%u;%u;%um", r, g, b);
+            }
+            else
+            {
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                "\033[39m");    
+            }
+            m_cur_fg = c.fg;
+        }
 
-            uint8_t r = (c.fg >> 16) & 0xFF;
-            uint8_t g = (c.fg >> 8)  & 0xFF;
-            uint8_t b = (c.fg)       & 0xFF;
-            offset += snprintf(buf + offset, sizeof(buf) - offset,
-                            "\033[38;2;%u;%u;%um", r, g, b);
-        }
-        else
+        // only emit bg SGR when color actually changes
+        if (c.bg != m_cur_bg)
         {
-            // reset foreground color
-            offset += snprintf(buf + offset, sizeof(buf) - offset,
-                            "\033[39m");    
+            if (c.bg != COLOR_DEFAULT)
+            {
+                uint8_t r = (c.bg >> 16) & 0xFF;
+                uint8_t g = (c.bg >> 8)  & 0xFF;
+                uint8_t b = (c.bg)       & 0xFF;
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                "\033[48;2;%u;%u;%um", r, g, b);
+            }
+            else
+            {
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                "\033[49m");    
+            }
+            m_cur_bg = c.bg;
         }
 
-        if (c.bg != COLOR_DEFAULT)
-        {
+        m_output.append(buf, static_cast<size_t>(offset));
 
-            uint8_t r = (c.bg >> 16) & 0xFF;
-            uint8_t g = (c.bg >> 8)  & 0xFF;
-            uint8_t b = (c.bg)       & 0xFF;
-            offset += snprintf(buf + offset, sizeof(buf) - offset,
-                            "\033[48;2;%u;%u;%um", r, g, b);
-        }
-        else
-        {
-            // reset background color
-            offset += snprintf(buf + offset, sizeof(buf) - offset,
-                            "\033[49m");    
-        }
         char utf8[5] = {};
-        uint32_t cp = c.ch;
-
-        if (cp < 0x80) {
-            utf8[0] = cp;
-        } else if (cp < 0x800) {
-            utf8[0] = 0xC0 | (cp >> 6);
-            utf8[1] = 0x80 | (cp & 0x3F);
-        } else if (cp < 0x10000) {
-            utf8[0] = 0xE0 | (cp >> 12);
-            utf8[1] = 0x80 | ((cp >> 6) & 0x3F);
-            utf8[2] = 0x80 | (cp & 0x3F);
-        } else {
-            utf8[0] = 0xF0 | (cp >> 18);
-            utf8[1] = 0x80 | ((cp >> 12) & 0x3F);
-            utf8[2] = 0x80 | ((cp >> 6) & 0x3F);
-            utf8[3] = 0x80 | (cp & 0x3F);
-        }
-
-
-        offset += snprintf(buf + offset, sizeof(buf) - offset,
-    "%s\033[0m", utf8);
-
-        move_cursor(row, col);
-        write(STDOUT_FILENO, buf, offset);
+        char32_t cp = c.ch;
+        int len = encode_utf8(cp, utf8);
+        m_output.append(utf8, static_cast<size_t>(len));
     }
 
     auto Frame::render() -> void
     {
+        m_output.clear();
+        // reserve a reasonable amount to avoid repeated realloc
+        m_output.reserve(static_cast<size_t>(m_rows * m_cols * 4));
 
-        for(uint32_t r = 0; r < m_rows; r++)
+        // sentinel that can't match any real cell color,
+        // forces the first dirty cell to always emit SGR
+        m_cur_fg = ~uint32_t(0);
+        m_cur_bg = ~uint32_t(0);
+        int cursor_row = -1;
+        int cursor_col = -1;
+
+        for(int r = 0; r < m_rows; r++)
         {
-            for(uint32_t c = 0; c < m_cols; c++)
+            for(int c = 0; c < m_cols; c++)
             {
-                uint32_t idx = m_cols * r + c;
-                if (!(m_front_buffer[idx] == m_back_buffer[idx]))
+                size_t idx = static_cast<size_t>(m_cols * r + c);
+                Cell& front = m_front_buffer[idx];
+                Cell& back = m_back_buffer[idx];
+
+                if (back.continuation)
                 {
-                    paint_cell(r, c, m_back_buffer[idx]);
-                    m_front_buffer[idx] = m_back_buffer[idx];
+                    continue;
                 }
+                if (front == back)
+                {
+                    continue;
+                }
+                
+                // skip cursor move if we're already at the right position
+                if (r != cursor_row || c != cursor_col)
+                {
+                    move_cursor(r, c);
+                }
+                paint_cell( back);
+                cursor_col = c + back.width;
+                cursor_row = r;
+
+                front = back;
+                if (back.width == 2 && idx + 1 < m_front_buffer.size())
+                {
+                    m_front_buffer[idx + 1] = m_back_buffer[idx + 1];
+                }
+                
             }
         }
 
-        fflush(stdout);
+        // position hardware cursor if requested, otherwise keep hidden
+        if (m_cursor_visible && m_cursor_row >= 0 && m_cursor_row < m_rows && m_cursor_col >= 0 && m_cursor_col < m_cols)
+        {
+            move_cursor(m_cursor_row, m_cursor_col);
+            m_output.append("\033[?25h");
+        }
+        else
+        {
+            m_output.append("\033[?25l");
+        }
+
+        // flush entire frame in one write if attached to a terminal
+        if (m_term != nullptr && !m_output.empty())
+        {
+            write(STDOUT_FILENO, m_output.data(), m_output.size());
+            fflush(stdout);
+        }
     }
 
     auto Frame::area() const -> Area
@@ -131,13 +220,53 @@ namespace koto
         return {0,0,m_cols,m_rows};
     }
 
-    auto Frame::handle_resize(uint32_t rows, uint32_t cols) -> void
+    auto Frame::handle_resize(int rows, int cols) -> void
     {
-        m_rows = rows;
-        m_cols = cols;
+        m_rows = (rows < 0) ? 0 : rows ;
+        m_cols = (cols < 0) ? 0 : cols;
         Cell def;
         def.ch = U'\xFF';
-        m_front_buffer.assign(rows * cols, def);
-        m_back_buffer.assign(rows * cols, def);
+        def.continuation = false;
+        m_front_buffer.assign(static_cast<size_t>(m_rows * m_cols), def);
+        m_back_buffer.assign(static_cast<size_t>(m_rows * m_cols), def);
+    }
+
+    auto Frame::to_plain_text_row(int r) const -> std::string
+    {
+        if (r < 0 || r >= m_rows) return "";
+        std::string row_str;
+        row_str.reserve(static_cast<size_t>(m_cols * 4));
+
+        for (int c = 0; c < m_cols; c++)
+        {
+            const Cell& cell = m_back_buffer[static_cast<size_t>(r * m_cols + c)];
+            if (cell.continuation) continue;
+
+            char utf8[5] = {};
+            int len = encode_utf8(cell.ch == 0 ? U' ' : cell.ch, utf8);
+            row_str.append(utf8, static_cast<size_t>(len));
+        }
+
+        // Trim trailing whitespace for clean snapshot comparison
+        while (!row_str.empty() && row_str.back() == ' ')
+        {
+            row_str.pop_back();
+        }
+
+        return row_str;
+    }
+
+    auto Frame::to_plain_text() const -> std::string
+    {
+        std::string result;
+        for (int r = 0; r < m_rows; r++)
+        {
+            result += to_plain_text_row(r);
+            if (r + 1 < m_rows)
+            {
+                result += '\n';
+            }
+        }
+        return result;
     }
 }
