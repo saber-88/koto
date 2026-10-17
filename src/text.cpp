@@ -55,88 +55,127 @@ namespace koto
         return *this;
     }
 
+    Text& Text::align(TextAlign a)
+    {
+        m_align = a;
+        return *this;
+    }
+
     auto Text::draw(Frame& frame, Area area) -> void
     {
         if (!area.is_valid()) return;
         
         int row = area.row;
-        int col = area.col;
-        bool skipping_current_line = false;
-
         const char* ptr = m_content.data();
-        const char* end = ptr + m_content.size();
+        const char* const end = ptr + m_content.size();
 
-        while (ptr < end)
+        while (ptr < end && row < area.bottom())
         {
-            char32_t cp = next_codepoint(ptr, end);
-
-            // Hard newline: always advance to next row and reset column
-            if (cp == U'\n')
+            // Find end of current line (up to '\n' or end of string)
+            const char* line_end = ptr;
+            while (line_end < end && *line_end != '\n')
             {
-                col = area.col;
-                row++;
-                skipping_current_line = false;
-                if (row >= area.bottom()) return;
-                continue;
+                line_end++;
             }
 
-            if (cp == U'\r')
+            // Calculate visual width of this line if alignment is Center or Right
+            int start_col = area.col;
+            if (m_align != TextAlign::Left)
             {
-                continue;
-            }
-
-            // If current line already exceeded width, skip characters until next newline
-            if (skipping_current_line)
-            {
-                continue;
-            }
-
-            // Tab stop alignment (4 spaces)
-            if (cp == U'\t')
-            {
-                int tab_size = 4;
-                int rel = col - area.col;
-                int next_stop = ((rel / tab_size) + 1) * tab_size;
-                int target_col = area.col + next_stop;
-                while (col < target_col && col < area.right())
+                int line_w = 0;
+                const char* scan = ptr;
+                while (scan < line_end)
                 {
-                    frame.set_cell(row, col, {U' ', m_fg, m_bg});
-                    col++;
+                    char32_t cp = next_codepoint(scan, line_end);
+                    if (cp == U'\r') continue;
+                    if (cp == U'\t')
+                    {
+                        int tab_size = 4;
+                        line_w = ((line_w / tab_size) + 1) * tab_size;
+                    }
+                    else
+                    {
+                        line_w += codepoint_width(cp);
+                    }
                 }
-                continue;
+
+                if (line_w < area.width)
+                {
+                    if (m_align == TextAlign::Center)
+                    {
+                        start_col = area.col + (area.width - line_w) / 2;
+                    }
+                    else if (m_align == TextAlign::Right)
+                    {
+                        start_col = area.col + (area.width - line_w);
+                    }
+                }
             }
 
-            int w = codepoint_width(cp);
-            
-            if (col + w > area.right())
-            {
-                if (m_text_wrap == TextWrap::Wrap)
-                {
-                    col = area.col;
-                    row++;
+            int col = start_col;
+            bool skipping = false;
 
-                    if (row >= area.bottom())
+            while (ptr < line_end)
+            {
+                char32_t cp = next_codepoint(ptr, line_end);
+                if (cp == U'\r') continue;
+
+                if (skipping) continue;
+
+                // Tab stop alignment (4 spaces)
+                if (cp == U'\t')
+                {
+                    int tab_size = 4;
+                    int rel = col - area.col;
+                    int next_stop = ((rel / tab_size) + 1) * tab_size;
+                    int target_col = area.col + next_stop;
+                    while (col < target_col && col < area.right())
+                    {
+                        frame.set_cell(row, col, {U' ', m_fg, m_bg});
+                        col++;
+                    }
+                    continue;
+                }
+
+                int w = codepoint_width(cp);
+                
+                if (col + w > area.right())
+                {
+                    if (m_text_wrap == TextWrap::Wrap)
+                    {
+                        col = area.col;
+                        row++;
+
+                        if (row >= area.bottom())
+                        {
+                            if (m_overflow == TextOverflow::Ellipsis && area.right() > area.col)
+                            {
+                                frame.set_cell(row - 1, area.right() - 1, {U'…', m_fg, m_bg});
+                            }
+                            return;
+                        }
+                    }
+                    else
                     {
                         if (m_overflow == TextOverflow::Ellipsis && area.right() > area.col)
                         {
-                            frame.set_cell(row - 1, area.right() - 1, {U'…', m_fg, m_bg});
+                            frame.set_cell(row, area.right() - 1, {U'…', m_fg, m_bg});
                         }
-                        return;
+                        skipping = true;
+                        continue;
                     }
                 }
-                else
-                {
-                    if (m_overflow == TextOverflow::Ellipsis && area.right() > area.col)
-                    {
-                        frame.set_cell(row, area.right() - 1, {U'…', m_fg, m_bg});
-                    }
-                    skipping_current_line = true;
-                    continue;
-                }
+
+                frame.set_cell(row, col, {cp, m_fg, m_bg});
+                col += w;
             }
 
-            frame.set_cell(row, col, {cp, m_fg, m_bg});
-            col += w;
+            // Skip past '\n'
+            if (ptr < end && *ptr == '\n')
+            {
+                ptr++;
+            }
+            row++;
         }
     }
 }

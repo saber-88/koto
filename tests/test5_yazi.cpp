@@ -72,6 +72,7 @@ int main()
     std::vector<FileItem> parent_items;
     std::vector<std::string> preview_lines;
     std::string preview_title = " Preview ";
+    TextAreaState preview_editor_state;
 
     // Updates only the preview panel (called on j/k navigation)
     auto update_preview = [&]() {
@@ -132,6 +133,7 @@ int main()
             preview_title = " Preview ";
             preview_lines.push_back("  (no items)");
         }
+        preview_editor_state = TextAreaState(preview_lines);
     };
 
     // Reloads directories from disk (only called on cd / h / l)
@@ -230,13 +232,14 @@ int main()
         // 1. Top Path Bar
         Box()
             .border_style(BorderStyle::Rounded)
-            .fg("#00AAFF")
+            .fg(Color::Cyan)
             .title(" 📁 yazi-style file manager (koto) ")
-            .title_fg("#FFFFFF")
+            .title_align(TitleAlign::Left)
+            .title_fg(Color::White)
             .draw(frame, v_sections[0]);
 
         Text("Path: " + current_path.string())
-            .fg("#00FFFF")
+            .fg(Color::Cyan)
             .draw(frame, v_sections[0].inset(1, 2, 1, 2));
 
         // 2. Main 3 Columns: Parent (20%), Active Dir (35%), Preview (45%)
@@ -249,46 +252,41 @@ int main()
         // Column 1: Parent Directory
         Box()
             .border_style(BorderStyle::Rounded)
-            .fg("#444444")
+            .fg(Color::DarkGray)
             .title(" Parent ")
-            .title_fg("#888888")
+            .title_align(TitleAlign::Left)
+            .title_fg(Color::Gray)
             .draw(frame, h_cols[0]);
 
         List(parent_list_state)
-            .fg("#666666")
+            .fg(Color::Gray)
             .draw(frame, h_cols[0].inset(1, 1, 1, 1));
 
         // Column 2: Current Directory (Active with wrap navigation!)
         Box()
             .border_style(BorderStyle::Rounded)
-            .fg("#00FF88")
+            .fg(Color::Emerald)
             .title(" " + current_path.filename().string() + " (" + std::to_string(current_items.size()) + ") [WRAP] ")
-            .title_fg("#00FF88")
+            .title_align(TitleAlign::Left)
+            .title_fg(Color::Emerald)
             .draw(frame, h_cols[1]);
 
         List(current_list_state)
-            .fg("#FFFFFF")
-            .highlight_fg("#00FF88")
-            .highlight_bg("#223322")
+            .fg(Color::White)
+            .highlight_fg(Color::Emerald)
+            .highlight_bg(Color::Rgb(34, 51, 34))
             .draw(frame, h_cols[1].inset(1, 1, 1, 1));
 
-        // Column 3: Preview Panel
-        Box()
+        // Column 3: Preview Panel using TextArea widget with line numbers!
+        TextArea(preview_editor_state)
             .border_style(BorderStyle::Rounded)
-            .fg("#AA00FF")
             .title(preview_title)
-            .title_fg("#FFAAFF")
+            .title_align(TitleAlign::Left)
+            .line_numbers(true)
+            .fg(Color::LightGray)
+            .line_number_fg(Color::DarkGray)
+            .focused(false)
             .draw(frame, h_cols[2]);
-
-        Area preview_area = h_cols[2].inset(1, 2, 1, 2);
-        for (int i = 0; i < preview_area.height && i < static_cast<int>(preview_lines.size()); ++i)
-        {
-            Area line_area = preview_area.set_row(preview_area.row + i).set_height(1);
-            Text(preview_lines[static_cast<size_t>(i)])
-                .fg("#DDDDDD")
-                .clip()
-                .draw(frame, line_area);
-        }
 
         // 3. Status Bar at the bottom
         std::string selected_info = "No items";
@@ -301,7 +299,7 @@ int main()
 
         std::string status = " " + selected_info + "  │  h/←: parent | l/→/Enter: open | j/↓: down (wraps) | k/↑: up (wraps) | q: quit";
         Text(status)
-            .fg("#888888")
+            .fg(Color::Gray)
             .draw(frame, v_sections[2]);
     });
 

@@ -63,9 +63,15 @@ int main()
 
     std::string current_key_str = "Press any key...";
     std::string details_str = "Waiting for input";
-    std::vector<std::string> history;
+    ListState history_state;
 
     app.on_key([&](const KeyEvent& key) {
+        if (key.ctrl && (key.ch == 'q' || key.ch == 'Q'))
+        {
+            app.quit();
+            return;
+        }
+
         current_key_str = format_key_name(key);
 
         std::stringstream ss;
@@ -75,10 +81,10 @@ int main()
            << " | Shift: " << (key.shift ? "YES" : "no");
         details_str = ss.str();
 
-        history.insert(history.begin(), current_key_str + " (" + details_str + ")");
-        if (history.size() > 20)
+        history_state.items.insert(history_state.items.begin(), current_key_str + " (" + details_str + ")");
+        if (history_state.items.size() > 50)
         {
-            history.pop_back();
+            history_state.items.pop_back();
         }
     });
 
@@ -87,9 +93,9 @@ int main()
         if (full.width < 20 || full.height < 10) return;
 
         // Background
-        Box().bg("#111111").filled(true).draw(frame, full);
+        Box().bg(Color::Rgb(17, 17, 17)).filled(true).draw(frame, full);
 
-        // Vertical split: Header (3), Main (10), History (Fill), Footer (1)
+        // Vertical split: Header (3), Main (7), History (Fill), Footer (1)
         auto rows = Layout::vertical(full, {
             Constraint::fixed(3),
             Constraint::fixed(7),
@@ -99,53 +105,47 @@ int main()
 
         // Header
         Box().border_style(BorderStyle::Rounded)
-            .title("koto :: Key Visualizer")
-            .fg("#00E5FF")
+            .title(" koto :: Key Visualizer ")
+            .title_align(TitleAlign::Left)
+            .fg(Color::Cyan)
             .draw(frame, rows[0]);
 
         // Main display panel
         Area display_box = rows[1].inset(0, 2, 0, 2);
         Box().border_style(BorderStyle::Thick)
-            .fg("#00FF88")
-            .bg("#1E1E1E")
+            .fg(Color::Emerald)
+            .bg(Color::Rgb(30, 30, 30))
             .filled(true)
             .draw(frame, display_box);
 
         Area key_text_area = display_box.inset(1, 4, 1, 4);
         Text(current_key_str)
-            .fg("#FFFFFF")
-            .bg("#1E1E1E")
+            .fg(Color::White)
+            .bg(Color::Rgb(30, 30, 30))
             .draw(frame, key_text_area);
 
         Area details_area = display_box.inset(3, 4, 1, 4);
         Text(details_str)
-            .fg("#888888")
-            .bg("#1E1E1E")
+            .fg(Color::Gray)
+            .bg(Color::Rgb(30, 30, 30))
             .draw(frame, details_area);
 
-        // History panel
+        // History panel via List widget
         Area history_area = rows[2].inset(0, 2, 0, 2);
-        Box().border_style(BorderStyle::Single)
-            .title("Key History")
-            .fg("#666666")
+        List(history_state)
+            .border_style(BorderStyle::Rounded)
+            .title(" Key History ")
+            .title_align(TitleAlign::Left)
+            .fg(Color::LightGray)
+            .highlight_symbol("▶ ")
+            .highlight_fg(Color::Emerald)
+            .overflow(TextOverflow::Ellipsis)
             .draw(frame, history_area);
-
-        Area history_inner = history_area.inset(1, 2, 1, 2);
-        int max_items = history_inner.height;
-        for (int i = 0; i < max_items && i < static_cast<int>(history.size()); i++)
-        {
-            Area line_area = history_inner.set_row(history_inner.row + i).set_height(1);
-            uint32_t color = (i == 0) ? parse_color("#00FF88") : parse_color("#AAAAAA");
-            Text(history[static_cast<size_t>(i)])
-                .fg(color)
-                .ellipsis()
-                .draw(frame, line_area);
-        }
 
         // Status bar
         Text("Press any key, function key (F1-F12), or modifier combination. Ctrl+Q to quit.")
-            .fg("#666666")
-            .bg("#111111")
+            .fg(Color::DarkGray)
+            .bg(Color::Rgb(17, 17, 17))
             .draw(frame, rows[3].inset(0, 2, 0, 0));
     });
 

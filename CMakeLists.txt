@@ -19,6 +19,11 @@ add_library(koto
     src/utf8.cpp
     src/text_input.cpp
     src/app.cpp
+    src/rule.cpp
+    src/gauge.cpp
+    src/sparkline.cpp
+    src/text_area.cpp
+    src/tabs.cpp
 )
 
 target_include_directories(koto PUBLIC include)

@@ -161,4 +161,54 @@ namespace koto
 
         return {r,c,width,height};
     }
+
+    auto Layout::grid(Area area, 
+                      const std::vector<Constraint>& row_constraints, 
+                      const std::vector<Constraint>& col_constraints) -> Grid
+    {
+        if (row_constraints.empty() || col_constraints.empty() || !area.is_valid())
+        {
+            return Grid(0, 0, {}, area);
+        }
+
+        size_t num_rows = row_constraints.size();
+        size_t num_cols = col_constraints.size();
+
+        auto row_areas = Layout::vertical(area, row_constraints);
+        std::vector<Area> cells;
+        cells.reserve(num_rows * num_cols);
+
+        for (size_t r = 0; r < num_rows; ++r)
+        {
+            auto col_areas = Layout::horizontal(row_areas[r], col_constraints);
+            for (size_t c = 0; c < num_cols; ++c)
+            {
+                cells.push_back(col_areas[c]);
+            }
+        }
+
+        return Grid(num_rows, num_cols, std::move(cells), area);
+    }
+
+    auto Layout::grid_uniform(Area area, size_t rows, size_t cols) -> Grid
+    {
+        if (rows == 0 || cols == 0)
+        {
+            return Grid(0, 0, {}, area);
+        }
+        std::vector<Constraint> row_c(rows, Constraint::fill());
+        std::vector<Constraint> col_c(cols, Constraint::fill());
+        return grid(area, row_c, col_c);
+    }
+
+    auto Layout::grid_fixed(Area area, size_t rows, size_t cols, int cell_width, int cell_height) -> Grid
+    {
+        if (rows == 0 || cols == 0)
+        {
+            return Grid(0, 0, {}, area);
+        }
+        std::vector<Constraint> row_c(rows, Constraint::fixed(cell_height));
+        std::vector<Constraint> col_c(cols, Constraint::fixed(cell_width));
+        return grid(area, row_c, col_c);
+    }
 }

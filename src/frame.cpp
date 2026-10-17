@@ -70,6 +70,23 @@ namespace koto
         m_back_buffer[idx] = c;
     }
 
+    auto Frame::fill(Area area, Cell c) -> void
+    {
+        if (!area.is_valid()) return;
+        for (int r = area.row; r < area.bottom(); ++r)
+        {
+            for (int col = area.col; col < area.right(); ++col)
+            {
+                set_cell(r, col, c);
+            }
+        }
+    }
+
+    auto Frame::fill(Area area, char32_t ch, uint32_t fg, uint32_t bg) -> void
+    {
+        fill(area, Cell{ch, fg, bg, 1, false});
+    }
+
     auto Frame::set_cursor(int row, int col) -> void
     {
         m_cursor_visible = true;

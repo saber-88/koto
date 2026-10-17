@@ -20,6 +20,8 @@ namespace koto
             auto handle_resize(int rows, int cols) -> void;
             auto set_cell(int row, int col, Cell c) -> void;
             auto get_cell(int row, int col) const -> Cell;
+            auto fill(Area area, Cell c) -> void;
+            auto fill(Area area, char32_t ch, uint32_t fg = COLOR_DEFAULT, uint32_t bg = COLOR_DEFAULT) -> void;
             auto clear_back_buffer() -> void;
             auto render() -> void;
             auto set_cursor(int row, int col) -> void;
@@ -28,6 +30,9 @@ namespace koto
             // Snapshot testing & inspection
             auto to_plain_text() const -> std::string;
             auto to_plain_text_row(int r) const -> std::string;
+            auto cursor_row() const -> int { return m_cursor_row; }
+            auto cursor_col() const -> int { return m_cursor_col; }
+            auto cursor_visible() const -> bool { return m_cursor_visible; }
             
         private:
 

@@ -14,3 +14,8 @@
 #include "text_input.hpp"
 #include "utf8.hpp"
 #include "app.hpp"
+#include "rule.hpp"
+#include "gauge.hpp"
+#include "sparkline.hpp"
+#include "text_area.hpp"
+#include "tabs.hpp"

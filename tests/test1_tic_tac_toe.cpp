@@ -115,65 +115,52 @@ int main()
 
         // Outer window box
         Box().border_style(BorderStyle::Rounded)
-            .title("Tic-Tac-Toe")
-            .fg("#00E5FF")
-            .bg("#111111")
+            .title(" Tic-Tac-Toe ")
+            .title_align(TitleAlign::Left)
+            .fg(Color::Cyan)
+            .bg(Color::Rgb(17, 17, 17))
             .filled(true)
             .draw(frame, full);
 
-        // Center a 30x15 box for the grid
+        // Center a 36x15 box for the grid
         Area center_area = Layout::center(full.inset(1, 1, 2, 1), 36, 15);
 
-        auto rows = Layout::vertical(center_area, {
-            Constraint::fixed(5),
-            Constraint::fixed(5),
-            Constraint::fixed(5),
+        // Uniform 3x3 Grid
+        auto grid = Layout::grid_uniform(center_area, 3, 3);
+
+        grid.for_each([&](size_t r, size_t c, const Area& cell_area) {
+            bool is_cursor = (r == static_cast<size_t>(cur_r) && c == static_cast<size_t>(cur_c));
+
+            BorderStyle style = is_cursor ? BorderStyle::Thick : BorderStyle::Single;
+            uint32_t border_color = is_cursor ? Color::Emerald : Color::Rgb(68, 68, 68);
+            uint32_t bg_color = is_cursor ? Color::Rgb(34, 34, 34) : Color::Rgb(24, 24, 24);
+
+            Box().border_style(style)
+                .fg(border_color)
+                .bg(bg_color)
+                .filled(true)
+                .draw(frame, cell_area);
+
+            int val = board[r][c];
+            std::string marker = (val == 1) ? "X" : (val == 2 ? "O" : " ");
+            uint32_t marker_color = (val == 1) ? Color::Rgb(255, 51, 102) : Color::Cyan;
+
+            // Draw centered marker
+            Text(marker)
+                .align(TextAlign::Center)
+                .fg(marker_color)
+                .bg(bg_color)
+                .draw(frame, cell_area.inset(2, 0, 2, 0));
         });
-
-        for (int r = 0; r < 3; r++)
-        {
-            auto cols = Layout::horizontal(rows[static_cast<size_t>(r)], {
-                Constraint::fixed(12),
-                Constraint::fixed(12),
-                Constraint::fixed(12),
-            });
-
-            for (int c = 0; c < 3; c++)
-            {
-                Area cell_area = cols[static_cast<size_t>(c)];
-                bool is_cursor = (r == cur_r && c == cur_c);
-
-                // Highlight border if active cell
-                BorderStyle style = is_cursor ? BorderStyle::Thick : BorderStyle::Single;
-                std::string border_color = is_cursor ? "#00FF88" : "#444444";
-                std::string bg_color = is_cursor ? "#222222" : "#181818";
-
-                Box().border_style(style)
-                    .fg(border_color)
-                    .bg(bg_color)
-                    .filled(true)
-                    .draw(frame, cell_area);
-
-                // Draw X or O inside cell
-                int val = board[static_cast<size_t>(r)][static_cast<size_t>(c)];
-                std::string marker = " ";
-                std::string marker_color = "#FFFFFF";
-                if (val == 1) { marker = "X"; marker_color = "#FF3366"; }
-                else if (val == 2) { marker = "O"; marker_color = "#00D4FF"; }
-
-                Area text_area = cell_area.inset(2, 5, 2, 5);
-                Text(marker).fg(marker_color).bg(bg_color).draw(frame, text_area);
-            }
-        }
 
         // Status bar at bottom
         Area status_area = full.set_row(full.bottom() - 2).set_height(1).inset(0, 3, 0, 3);
-        Text(status).fg("#FFFF00").bg("#111111").draw(frame, status_area);
+        Text(status).fg(Color::Yellow).bg(Color::Rgb(17, 17, 17)).draw(frame, status_area);
 
         Area footer_area = full.set_row(full.bottom() - 1).set_height(1).inset(0, 3, 0, 3);
         Text("Navigation: Arrows / hjkl | Select: Space/Enter | Restart: R | Quit: Ctrl+Q")
-            .fg("#666666")
-            .bg("#111111")
+            .fg(Color::DarkGray)
+            .bg(Color::Rgb(17, 17, 17))
             .draw(frame, footer_area);
     });
 

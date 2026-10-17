@@ -168,17 +168,55 @@ The repository comes with 6 standalone executables demonstrating each layer of t
 | **`test2_key_visualizer`** | Live keystroke inspector reporting exact modifier flags, F1–F12, and raw hex codepoints. |
 | **`test3_vbox`** | Demonstrates declarative flex and percentage layout composition (`VBox` / `HBox`). |
 | **`test4_text_input`** | 3-layer input customization: Pre-hook interceptors, validation filters, and modal Vim editing with `Tab` / `Shift+Tab` focus cycling. |
-| **`test5_yazi`** | A 3-column Miller column file explorer inspired by Yazi with live file previews and wrapped navigation. |
-| **`test6_headless_test`** | Automated headless snapshot test suite with zero terminal dependencies. |
+| **`test5_yazi`** | A 3-column Miller column file explorer inspired by Yazi with live file previews via `TextArea` and wrapped navigation. |
+| **`test6_headless_test`** | Automated headless snapshot test suite with 13 tests and zero terminal dependencies. |
+| **`test7_dashboard`** | Real-time 60 FPS system telemetry monitor demonstrating Gauge with fractional sub-blocks, rolling Sparklines, titled Rules, and Color lerping. |
+| **`test8_text_cjk_emoji`** | Comprehensive UTF-8 test suite asserting CJK ideographs, 2-column emojis, continuation cells, overwrite protection, and wide text alignment. |
+| **`test9_chess_board`** | Fully playable 8x8 interactive Chess board demonstrating `Layout::grid_uniform`, `Frame::fill`, alternating wood squares, and Unicode chess piece rendering. |
+| **`test10_cjk_terminal`** | Interactive live terminal inspector for Japanese (Kanji/Kana), Chinese, Korean (Hangul), 2-column Emojis, vertical alignment ruler, and live UTF-8 input with `Tabs`. |
+| **`test11_text_area`** | Multi-line code editor with line numbers gutter, Sticky/Clamp cursor navigation, Margin/Clamp viewport scrolling, and real-time status telemetry. |
+| **`test12_tabs`** | Multi-tab container orchestrating `TextArea`, `List`, `Gauge`, `Sparkline`, and `Grid` chess board with live tab style switching. |
 
 Run any demo directly from `./build/`:
 ```bash
-./build/test5_yazi
+./build/test12_tabs
 ```
 
 ---
 
 ## 🎨 Core Widgets & Components
+
+### `TextArea` & `TextAreaState`
+Multi-line text editor featuring dynamic line numbers gutter, UTF-8 byte boundary alignment, and flexible navigation/scrolling modes:
+* **`CursorColumnMode`**: `Sticky` (preserves your goal column when navigating across shorter lines) vs. `Clamp`.
+* **`ScrollMode`**: `Margin` (maintains context padding around the cursor) vs. `Clamp`.
+* **Line Operations**: Splitting (`newline`), backward boundary joining (`backspace`), forward pulling (`delete_forward`).
+```cpp
+TextAreaState editor("int main() {\n    return 0;\n}");
+editor.cursor_mode = CursorColumnMode::Sticky;
+editor.scroll_mode = ScrollMode::Margin;
+
+TextArea(editor)
+    .border_style(BorderStyle::Rounded)
+    .title(" editor.cpp ")
+    .line_numbers(true)
+    .line_number_fg(Color::DarkGray)
+    .draw(frame, area);
+```
+
+### `Tabs` & `TabsState`
+Decoupled, lightweight horizontal tab bar for organizing multi-screen interfaces:
+* **Styles**: `TabsStyle::Bar` (` Home │ Logs │ Settings `), `TabsStyle::Pill` (` [ Home ]  [ Logs ] `), and `TabsStyle::Underline` (`━` active underline).
+* **Navigation**: Circular wrapping (`select_next()`, `select_prev()`), direct number key selection (`1`..`9`), and optional `on_change` reactive callbacks.
+```cpp
+TabsState tabs({"Editor", "Files", "Telemetry"});
+
+Tabs(tabs)
+    .style(TabsStyle::Underline)
+    .active_bg(Color::Emerald)
+    .inactive_fg(Color::Gray)
+    .draw(frame, tab_area);
+```
 
 ### `Box`
 Supports 5 distinct border styles (`Rounded`, `Single`, `Double`, `Thick`, `None`), selective side borders, background fills, and 3-way title alignment (`Left`, `Center`, `Right`).
@@ -187,8 +225,8 @@ Box()
     .border_style(BorderStyle::Rounded)
     .title("Processes")
     .title_align(TitleAlign::Left)
-    .fg("#00E5FF")
-    .bg("#111111")
+    .fg(Color::Cyan)
+    .bg(Color::Rgb(17, 17, 17))
     .filled(true)
     .draw(frame, area);
 ```
@@ -202,8 +240,8 @@ files.navigation = ListNavigation::Wrap;
 List(files)
     .border_style(BorderStyle::Rounded)
     .highlight_symbol("> ")
-    .highlight_fg("#00FF88")
-    .highlight_bg("#003322")
+    .highlight_fg(Color::Emerald)
+    .highlight_bg(Color::Rgb(0, 51, 34))
     .overflow(TextOverflow::Ellipsis)
     .draw(frame, area);
 ```
@@ -218,8 +256,65 @@ TextInputState input("Initial text");
 TextInput(input)
     .placeholder("Search...")
     .border_style(BorderStyle::Rounded)
-    .focused_border_fg("#00FF88")
+    .focused_border_fg(Color::Emerald)
     .draw(frame, area);
+```
+
+### `Gauge` (Progress Bar)
+Supports smooth sub-cell fractional Unicode resolution (1/8th cell increments: `▏▎▍▌▋▊▉█`), centered labels, custom fill/empty characters, and foreground/background colors.
+```cpp
+Gauge()
+    .ratio(0.75f)
+    .label(" 75% Complete ")
+    .filled_fg(Color::Emerald)
+    .empty_fg(Color::DarkGray)
+    .draw(frame, area);
+```
+
+### `Sparkline` (Data Graph)
+Renders compact time-series trends using 8-level Unicode bar heights (`  ▂ ▃ ▄ ▅ ▆ ▇ █`).
+```cpp
+std::vector<uint64_t> cpu = {10, 25, 40, 65, 80, 55, 30};
+Sparkline()
+    .data(cpu)
+    .max(100)
+    .fg(Color::Cyan)
+    .draw(frame, area);
+```
+
+### `Rule` (Dividers & Section Separators)
+Draws horizontal separator lines with optional embedded titles and alignment.
+```cpp
+Rule("System Logs")
+    .style(BorderStyle::Double)
+    .title_align(TitleAlign::Center)
+    .fg(Color::DarkGray)
+    .title_fg(Color::Yellow)
+    .draw(frame, area);
+```
+
+### `Color` & Mathematical Gradients
+Predefined palette constants, 24-bit RGB constructors, and linear interpolation (`lerp`):
+```cpp
+// 24-bit RGB
+uint32_t c = Color::rgb(0, 229, 255);
+
+// Linear gradient: green -> yellow -> red
+uint32_t temp_color = Color::lerp(Color::Green, Color::Red, load_ratio);
+```
+
+### `Grid` (2D Coordinate Layout Engine)
+Effortlessly generate 2D coordinate layouts for board games (Tic-Tac-Toe, Chess, Checkers) or responsive data matrices without manual nested loops:
+```cpp
+// 8x8 Chess Board in 1 line
+auto board = Layout::grid_uniform(area, 8, 8);
+
+board.for_each([&](size_t r, size_t c, const Area& square) {
+    bool dark = ((r + c) % 2 == 1);
+    uint32_t bg = dark ? Color::Rgb(181, 136, 99) : Color::Rgb(240, 217, 181);
+    frame.fill(square, U' ', Color::Default, bg);
+    // Draw piece in square!
+});
 ```
 
 ---

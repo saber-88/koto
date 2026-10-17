@@ -15,6 +15,11 @@ namespace koto
         m_key_handler = std::move(handler);
         return *this;
     }
+    App& App::on_tick(std::function<void()> handler)
+    {
+        m_tick_handler = std::move(handler);
+        return *this;
+    }
     App& App::on_render(std::function<void(Frame&)> handler)
     {
         m_render_handler = std::move(handler);
@@ -40,6 +45,12 @@ namespace koto
 
         while (m_running)
         {
+            if (m_tick_handler)
+            {
+                m_tick_handler();
+                m_needs_draw = true;
+            }
+
             if (m_needs_draw)
             {
                 m_frame.clear_back_buffer();

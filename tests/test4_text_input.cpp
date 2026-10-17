@@ -156,25 +156,26 @@ int main()
         // 1. Header Box
         Box()
             .border_style(BorderStyle::Rounded)
-            .fg("#00AAFF")
+            .fg(Color::Cyan)
             .title(" koto — 3 Layers of TextInput Customization ")
-            .title_fg("#FFFFFF")
+            .title_align(TitleAlign::Left)
+            .title_fg(Color::White)
             .draw(frame, sections[0]);
 
         // 2. Layer 1: Interceptor Input
         TextInput(input_layer1)
             .placeholder("Layer 1: Enter submits, Esc clears...")
             .border_style(BorderStyle::Rounded)
-            .focused_border_fg("#00FF88")
-            .fg("#FFFFFF")
+            .focused_border_fg(Color::Emerald)
+            .fg(Color::White)
             .draw(frame, sections[1]);
 
         // 3. Layer 2: Filtered Numeric Input
         TextInput(input_layer2)
             .placeholder("Layer 2: Digits only (max 5 chars)...")
             .border_style(BorderStyle::Rounded)
-            .focused_border_fg("#FFAA00")
-            .fg("#FFFFFF")
+            .focused_border_fg(Color::Amber)
+            .fg(Color::White)
             .draw(frame, sections[2]);
 
         // 4. Layer 3: Vim Modal Input
@@ -184,25 +185,25 @@ int main()
             .title(vim_mode_title)
             .placeholder("Layer 3: Vim primitives...")
             .border_style(BorderStyle::Rounded)
-            .focused_border_fg(vim_insert_mode ? "#00FF88" : "#FF55AA")
-            .fg("#FFFFFF")
+            .focused_border_fg(vim_insert_mode ? Color::Emerald : Color::Rgb(255, 85, 170))
+            .fg(Color::White)
             .draw(frame, sections[3]);
 
         // 5. Activity Log Label
         Text("Activity & Event Log:")
-            .fg("#888888")
+            .fg(Color::Gray)
             .draw(frame, sections[4].inset(0, 1, 0, 0));
 
         // 6. Activity Log List
         List(list_state)
             .border_style(BorderStyle::Single)
-            .fg("#CCCCCC")
-            .highlight_fg("#00FFAA")
+            .fg(Color::LightGray)
+            .highlight_fg(Color::Cyan)
             .draw(frame, sections[5]);
 
         // 7. Footer Status Bar
         Text("[Tab / Shift+Tab] Switch Field | [Ctrl+Q] Quit")
-            .fg("#666666")
+            .fg(Color::DarkGray)
             .draw(frame, sections[6].inset(0, 1, 0, 0));
     });
 
