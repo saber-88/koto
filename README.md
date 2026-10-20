@@ -7,7 +7,7 @@
 [![CJK & Unicode](https://img.shields.io/badge/Unicode-7%20Passing-brightgreen.svg)]()
 [![Zero Warnings](https://img.shields.io/badge/Compiler%20Warnings-Zero-brightgreen.svg)]()
 
-> **koto** (琴) is a modern, dependency-free, high-performance C++23 Terminal User Interface (TUI) engine engineered for deterministic state management ($\text{UI} = f(\text{state})$), differential double-buffered rendering, tear-free atomic GPU frame presentation, universal keyboard escape decoding, and CI/CD automated headless snapshot testing.
+> **koto** (琴) is a modern, dependency-free, high-performance C++23 Terminal User Interface (TUI) engine engineered for deterministic state management (`UI = f(state)`), differential double-buffered rendering, tear-free atomic GPU frame presentation, universal keyboard escape decoding, and CI/CD automated headless snapshot testing.
 
 ---
 
@@ -20,9 +20,9 @@ Traditional terminal UI development in C and C++ has long been burdened by low-l
 - **Zero External Dependencies**: Pure standard C++23 library and direct POSIX system calls. No `ncurses`, no `terminfo`, no dynamic link requirements.
 - **DEC Mode 2026 Synchronized Updates**: Emits private CSI sequences (`\033[?2026h` / `\033[?2026l`) to halt terminal rasterization during buffer writes, enabling atomic, tear-free, flicker-free single-flip frame presentation in GPU-accelerated terminals.
 - **Differential Double-Buffered Renderer**: Compares front and back cell buffers per frame. Only modified cells emit ANSI SGR sequences, batched into a single formatted `write()` syscall.
-- **Universal Keyboard Engine & Kitty Protocol (`CSI u`)**: Automatically negotiates Kitty keyboard enhancement flag 1 (`\033[>1u` / `\033[<u`) to disambiguate `Tab` vs `Ctrl+I`, `Enter` vs `Ctrl+M`, `Escape`, modifier bitmasks ($M = 1 + \text{flags}$ including Meta / Super / Windows keys), and functional keycodes across Kitty, Ghostty, Alacritty, WezTerm, Foot, GNOME Terminal, Konsole, xterm, tmux, and SSH.
+- **Universal Keyboard Engine & Kitty Protocol (`CSI u`)**: Automatically negotiates Kitty keyboard enhancement flag 1 (`\033[>1u` / `\033[<u`) to disambiguate `Tab` vs `Ctrl+I`, `Enter` vs `Ctrl+M`, `Escape`, modifier bitmasks (formula: `M = 1 + flags`, including Meta / Super / Windows keys), and functional keycodes across Kitty, Ghostty, Alacritty, WezTerm, Foot, GNOME Terminal, Konsole, xterm, tmux, and SSH.
 - **Bracketed Paste Mode (`\033[?2004h`)**: Captures clipboard streams inside dedicated `PasteEvent`s, protecting against runaway auto-indentation ("staircase effect"), frame render storms, and malicious terminal command injection.
-- **Deterministic State Architecture ($\text{UI} = f(\text{state})$)**: Decouples business logic and navigation (`TextAreaState`, `ListState`, `TextInputState`, `TabsState`) from pure, immutable views (`TextArea`, `List`, `TextInput`, `Tabs`).
+- **Deterministic State Architecture (`UI = f(state)`)**: Decouples business logic and navigation (`TextAreaState`, `ListState`, `TextInputState`, `TabsState`) from pure, immutable views (`TextArea`, `List`, `TextInput`, `Tabs`).
 - **Headless Snapshot Testing by Default**: Create an in-memory `Frame(rows, cols)` without a live TTY or virtual framebuffer, draw any widget, and assert on exact row text with `frame.to_plain_text_row(r)`.
 - **Wide Unicode, CJK & Emoji Engine**: Full UAX-11 East Asian Width calculation, 2-column continuation cells, emoji rendering, and safe overwrite clipping.
 - **Zero Warnings**: Compiles cleanly with `-Wall -Werror -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast`.
@@ -401,12 +401,12 @@ Supporting emulators (Ghostty, Kitty, WezTerm, Alacritty, iTerm2, modern Windows
 In legacy terminals, `Ctrl+I` is byte-for-byte identical to `Tab` (`0x09`), `Ctrl+M` is identical to `Enter` (`0x0D`), and `Escape` (`0x1B`) is ambiguous with the start of an escape sequence.
 
 On startup, `koto` automatically negotiates **Kitty progressive enhancement flag 1** (`\033[>1u`) and pops it on exit (`\033[<u`):
-- `Shift + Enter` $\to$ `\033[13;2u`
-- `Ctrl + Enter` $\to$ `\033[13;5u`
-- `Ctrl + Tab` $\to$ `\033[9;5u` (distinct from `Ctrl+I`!)
-- `Shift + Tab` $\to$ `\033[9;2u` (satisfies both `key.is(Key::Tab)` with `shift` and `key.is(Key::BackTab)`)
-- `Ctrl + Backspace` $\to$ `\033[127;5u`
-- `Meta / Super + Key` $\to$ Decodes modifier bitmask 8 / 32 (`key.meta == true`)
+- `Shift + Enter` → `\033[13;2u`
+- `Ctrl + Enter` → `\033[13;5u`
+- `Ctrl + Tab` → `\033[9;5u` (distinct from `Ctrl+I`!)
+- `Shift + Tab` → `\033[9;2u` (satisfies both `key.is(Key::Tab)` with `shift` and `key.is(Key::BackTab)`)
+- `Ctrl + Backspace` → `\033[127;5u`
+- `Meta / Super + Key` → Decodes modifier bitmask 8 / 32 (`key.meta == true`)
 - Functional PUA keys: Keypad Enter (`57414`), Keypad Arrows (`57417`–`57420`), Delete (`57426`)
 - Automatically ignores key release events (`:3`) to prevent double-firing keystrokes.
 
