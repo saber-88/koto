@@ -98,14 +98,14 @@ namespace koto
         {
             for (int col = area.col; col < area.right(); ++col)
             {
-                set_cell(r, col, c);
+                this->set_cell(r, col, c);
             }
         }
     }
 
     auto Frame::fill(Area area, char32_t ch, uint32_t fg, uint32_t bg) -> void
     {
-        fill(area, Cell{ch, fg, bg, 1, false});
+        this->fill(area, Cell{ch, fg, bg, 1, false});
     }
 
     auto Frame::set_cursor(int row, int col) -> void
@@ -180,10 +180,8 @@ namespace koto
 
         m_output.append(buf, static_cast<size_t>(offset));
 
-        char utf8[5] = {};
-        char32_t cp = c.ch;
-        int len = encode_utf8(cp, utf8);
-        m_output.append(utf8, static_cast<size_t>(len));
+        auto encoded = encode_utf8(c.ch);
+        m_output.append(encoded.view());
     }
 
     auto Frame::render() -> void
@@ -222,9 +220,9 @@ namespace koto
                 // skip cursor move if we're already at the right position
                 if (r != cursor_row || c != cursor_col)
                 {
-                    move_cursor(r, c);
+                    this->move_cursor(r, c);
                 }
-                paint_cell( back);
+                this->paint_cell(back);
                 cursor_col = c + back.width;
                 cursor_row = r;
 
@@ -240,7 +238,7 @@ namespace koto
         // position hardware cursor if requested, otherwise keep hidden
         if (m_cursor_visible && m_cursor_row >= 0 && m_cursor_row < m_rows && m_cursor_col >= 0 && m_cursor_col < m_cols)
         {
-            move_cursor(m_cursor_row, m_cursor_col);
+            this->move_cursor(m_cursor_row, m_cursor_col);
             m_output.append("\033[?25h");
         }
         else

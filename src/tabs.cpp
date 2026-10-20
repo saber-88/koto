@@ -20,72 +20,72 @@ namespace koto
     TabsState::TabsState(std::vector<std::string> initial_titles, size_t initial_selected)
         : titles(std::move(initial_titles)), selected(initial_selected)
     {
-        if (!titles.empty() && selected >= titles.size())
+        if (!this->titles.empty() && this->selected >= this->titles.size())
         {
-            selected = titles.size() - 1;
+            this->selected = this->titles.size() - 1;
         }
     }
 
     void TabsState::select_next()
     {
-        if (titles.empty())
+        if (this->titles.empty())
         {
             return;
         }
-        selected = (selected + 1) % titles.size();
-        if (on_change)
+        this->selected = (this->selected + 1) % this->titles.size();
+        if (this->on_change)
         {
-            on_change(selected, titles[selected]);
+            this->on_change(this->selected, this->titles[this->selected]);
         }
     }
 
     void TabsState::select_prev()
     {
-        if (titles.empty())
+        if (this->titles.empty())
         {
             return;
         }
-        selected = (selected + titles.size() - 1) % titles.size();
-        if (on_change)
+        this->selected = (this->selected + this->titles.size() - 1) % this->titles.size();
+        if (this->on_change)
         {
-            on_change(selected, titles[selected]);
+            this->on_change(this->selected, this->titles[this->selected]);
         }
     }
 
     void TabsState::select_first()
     {
-        if (titles.empty())
+        if (this->titles.empty())
         {
             return;
         }
-        selected = 0;
-        if (on_change)
+        this->selected = 0;
+        if (this->on_change)
         {
-            on_change(selected, titles[selected]);
+            this->on_change(this->selected, this->titles[this->selected]);
         }
     }
 
     void TabsState::select_last()
     {
-        if (titles.empty())
+        if (this->titles.empty())
         {
             return;
         }
-        selected = titles.size() - 1;
-        if (on_change)
+        this->selected = this->titles.size() - 1;
+        if (this->on_change)
         {
-            on_change(selected, titles[selected]);
+            this->on_change(this->selected, this->titles[this->selected]);
         }
     }
 
     void TabsState::set_selected(size_t index)
     {
-        if (index < titles.size())
+        if (index < this->titles.size())
         {
-            selected = index;
-            if (on_change)
+            this->selected = index;
+            if (this->on_change)
             {
-                on_change(selected, titles[selected]);
+                this->on_change(this->selected, this->titles[this->selected]);
             }
         }
     }
@@ -94,22 +94,22 @@ namespace koto
     {
         if (key.is(Key::Tab) || key.is(Key::Right))
         {
-            select_next();
+            this->select_next();
             return true;
         }
         if (key.is(Key::BackTab) || key.is(Key::Left))
         {
-            select_prev();
+            this->select_prev();
             return true;
         }
         if (key.is(Key::Home))
         {
-            select_first();
+            this->select_first();
             return true;
         }
         if (key.is(Key::End))
         {
-            select_last();
+            this->select_last();
             return true;
         }
 
@@ -117,9 +117,9 @@ namespace koto
         if (!key.ctrl && !key.alt && key.ch >= '1' && key.ch <= '9')
         {
             size_t idx = static_cast<size_t>(key.ch - '1');
-            if (idx < titles.size())
+            if (idx < this->titles.size())
             {
-                set_selected(idx);
+                this->set_selected(idx);
                 return true;
             }
         }
@@ -129,18 +129,18 @@ namespace koto
 
     std::optional<std::string_view> TabsState::selected_title() const
     {
-        if (selected < titles.size())
+        if (this->selected < this->titles.size())
         {
-            return std::string_view(titles[selected]);
+            return std::string_view(this->titles[this->selected]);
         }
         return std::nullopt;
     }
 
     const std::string* TabsState::selected_title_ptr() const
     {
-        if (selected < titles.size())
+        if (this->selected < this->titles.size())
         {
-            return &titles[selected];
+            return &this->titles[this->selected];
         }
         return nullptr;
     }

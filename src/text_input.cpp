@@ -21,38 +21,38 @@ namespace koto
 
     auto TextInputState::set_text(std::string_view text) -> void
     {
-        value = std::string(text);
-        cursor = value.size();
-        scroll_offset = 0;
+        this->value = std::string(text);
+        this->cursor = this->value.size();
+        this->scroll_offset = 0;
     }
 
     auto TextInputState::text() const -> std::string_view
     {
-        return value;
+        return this->value;
     }
 
     auto TextInputState::clear() -> void
     {
-        value.clear();
-        cursor = 0;
-        scroll_offset = 0;
+        this->value.clear();
+        this->cursor = 0;
+        this->scroll_offset = 0;
     }
 
     auto TextInputState::on_key(KeyInterceptor handler) -> TextInputState&
     {
-        on_key_handler = std::move(handler);
+        this->on_key_handler = std::move(handler);
         return *this;
     }
 
     auto TextInputState::set_filter(InputFilter filter) -> TextInputState&
     {
-        input_filter = std::move(filter);
+        this->input_filter = std::move(filter);
         return *this;
     }
 
     auto TextInputState::insert(char32_t cp) -> bool
     {
-        if (input_filter && !input_filter(value, cp))
+        if (this->input_filter && !this->input_filter(this->value, cp))
         {
             return false;
         }
@@ -63,9 +63,9 @@ namespace koto
             return false;
         }
 
-        cursor = std::min(cursor, value.size());
-        value.insert(cursor, encoded.view());
-        cursor += encoded.size;
+        this->cursor = std::min(this->cursor, this->value.size());
+        this->value.insert(this->cursor, encoded.view());
+        this->cursor += encoded.size;
         return true;
     }
 
@@ -78,7 +78,7 @@ namespace koto
             char32_t cp = next_codepoint(remaining);
             if (cp != 0)
             {
-                changed |= insert(cp);
+                changed |= this->insert(cp);
             }
         }
         return changed;
@@ -86,99 +86,99 @@ namespace koto
 
     auto TextInputState::backspace() -> bool
     {
-        if (cursor == 0 || value.empty())
+        if (this->cursor == 0 || this->value.empty())
         {
             return false;
         }
 
-        cursor = std::min(cursor, value.size());
-        size_t prev = cursor - 1;
-        while (prev > 0 && (static_cast<uint8_t>(value[prev]) & 0xC0) == 0x80)
+        this->cursor = std::min(this->cursor, this->value.size());
+        size_t prev = this->cursor - 1;
+        while (prev > 0 && (static_cast<uint8_t>(this->value[prev]) & 0xC0) == 0x80)
         {
             prev--;
         }
-        value.erase(prev, cursor - prev);
-        cursor = prev;
+        this->value.erase(prev, this->cursor - prev);
+        this->cursor = prev;
         return true;
     }
 
     auto TextInputState::delete_forward() -> bool
     {
-        if (cursor >= value.size())
+        if (this->cursor >= this->value.size())
         {
             return false;
         }
 
-        size_t next = cursor + 1;
-        while (next < value.size() && (static_cast<uint8_t>(value[next]) & 0xC0) == 0x80)
+        size_t next = this->cursor + 1;
+        while (next < this->value.size() && (static_cast<uint8_t>(this->value[next]) & 0xC0) == 0x80)
         {
             next++;
         }
-        value.erase(cursor, next - cursor);
+        this->value.erase(this->cursor, next - this->cursor);
         return true;
     }
 
     auto TextInputState::delete_word() -> bool
     {
-        if (cursor == 0 || value.empty())
+        if (this->cursor == 0 || this->value.empty())
         {
             return false;
         }
 
-        cursor = std::min(cursor, value.size());
-        size_t pos = cursor;
-        while (pos > 0 && value[pos - 1] == ' ')
+        this->cursor = std::min(this->cursor, this->value.size());
+        size_t pos = this->cursor;
+        while (pos > 0 && this->value[pos - 1] == ' ')
         {
             pos--;
         }
-        while (pos > 0 && value[pos - 1] != ' ')
+        while (pos > 0 && this->value[pos - 1] != ' ')
         {
             pos--;
         }
 
-        value.erase(pos, cursor - pos);
-        cursor = pos;
+        this->value.erase(pos, this->cursor - pos);
+        this->cursor = pos;
         return true;
     }
 
     auto TextInputState::move_left() -> bool
     {
-        if (cursor == 0)
+        if (this->cursor == 0)
         {
             return false;
         }
 
-        cursor = std::min(cursor, value.size());
-        size_t prev = cursor - 1;
-        while (prev > 0 && (static_cast<uint8_t>(value[prev]) & 0xC0) == 0x80)
+        this->cursor = std::min(this->cursor, this->value.size());
+        size_t prev = this->cursor - 1;
+        while (prev > 0 && (static_cast<uint8_t>(this->value[prev]) & 0xC0) == 0x80)
         {
             prev--;
         }
-        cursor = prev;
+        this->cursor = prev;
         return true;
     }
 
     auto TextInputState::move_right() -> bool
     {
-        if (cursor >= value.size())
+        if (this->cursor >= this->value.size())
         {
             return false;
         }
 
-        size_t next = cursor + 1;
-        while (next < value.size() && (static_cast<uint8_t>(value[next]) & 0xC0) == 0x80)
+        size_t next = this->cursor + 1;
+        while (next < this->value.size() && (static_cast<uint8_t>(this->value[next]) & 0xC0) == 0x80)
         {
             next++;
         }
-        cursor = next;
+        this->cursor = next;
         return true;
     }
 
     auto TextInputState::move_home() -> bool
     {
-        if (cursor != 0)
+        if (this->cursor != 0)
         {
-            cursor = 0;
+            this->cursor = 0;
             return true;
         }
         return false;
@@ -186,9 +186,9 @@ namespace koto
 
     auto TextInputState::move_end() -> bool
     {
-        if (cursor != value.size())
+        if (this->cursor != this->value.size())
         {
-            cursor = value.size();
+            this->cursor = this->value.size();
             return true;
         }
         return false;
@@ -196,13 +196,13 @@ namespace koto
 
     auto TextInputState::handle_event(const KeyEvent& key) -> bool
     {
-        if (!focused)
+        if (!this->focused)
         {
             return false;
         }
 
         // 1. Run user interceptor pre-hook if registered
-        if (on_key_handler && on_key_handler(*this, key))
+        if (this->on_key_handler && this->on_key_handler(*this, key))
         {
             return true;
         }
@@ -210,50 +210,50 @@ namespace koto
         // 2. Navigation
         if (key.is(Key::Left))
         {
-            return move_left();
+            return this->move_left();
         }
         if (key.is(Key::Right))
         {
-            return move_right();
+            return this->move_right();
         }
         if (key.is(Key::Home) || (key.ctrl && (key.ch == 'A' || key.ch == 'a')))
         {
-            return move_home();
+            return this->move_home();
         }
         if (key.is(Key::End) || (key.ctrl && (key.ch == 'E' || key.ch == 'e')))
         {
-            return move_end();
+            return this->move_end();
         }
 
         // 3. Line/Word Deletion shortcuts
         if (key.ctrl && (key.ch == 'U' || key.ch == 'u'))
         {
-            if (!value.empty())
+            if (!this->value.empty())
             {
-                clear();
+                this->clear();
                 return true;
             }
             return false;
         }
         if (key.ctrl && (key.ch == 'W' || key.ch == 'w'))
         {
-            return delete_word();
+            return this->delete_word();
         }
 
         // 4. Character Deletion
         if (key.is(Key::Backspace))
         {
-            return backspace();
+            return this->backspace();
         }
         if (key.is(Key::Delete))
         {
-            return delete_forward();
+            return this->delete_forward();
         }
 
         // 5. Character Insertion (ASCII and multi-byte UTF-8)
         if (!key.ctrl && !key.alt && key.is_char())
         {
-            return insert(static_cast<char32_t>(key.ch));
+            return this->insert(static_cast<char32_t>(key.ch));
         }
 
         return false;

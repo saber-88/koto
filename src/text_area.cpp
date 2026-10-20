@@ -66,7 +66,7 @@ namespace koto
           show_line_number(true), cursor_mode(CursorColumnMode::Sticky),
           scroll_mode(ScrollMode::Margin)
     {
-        set_text(initial_text);
+        this->set_text(initial_text);
     }
 
     TextAreaState::TextAreaState(std::vector<std::string> initial_lines)
@@ -75,9 +75,9 @@ namespace koto
           show_line_number(true), cursor_mode(CursorColumnMode::Sticky),
           scroll_mode(ScrollMode::Margin)
     {
-        if (text.empty())
+        if (this->text.empty())
         {
-            text.push_back("");
+            this->text.push_back("");
         }
     }
 
@@ -87,7 +87,7 @@ namespace koto
 
         if (cp == U'\n')
         {
-            newline();
+            this->newline();
             return;
         }
         if (cp == U'\r')
@@ -101,11 +101,11 @@ namespace koto
             return;
         }
 
-        auto& line = text[cursor_row];
-        align_cursor_to_utf8(line, cursor_col);
-        line.insert(cursor_col, encoded.view());
-        cursor_col += encoded.size;
-        preferred_col = cursor_col;
+        auto& line = this->text[this->cursor_row];
+        align_cursor_to_utf8(line, this->cursor_col);
+        line.insert(this->cursor_col, encoded.view());
+        this->cursor_col += encoded.size;
+        this->preferred_col = this->cursor_col;
     }
 
     void TextAreaState::insert(std::string_view str)
@@ -116,7 +116,7 @@ namespace koto
             char32_t cp = next_codepoint(remaining);
             if (cp != 0)
             {
-                insert(cp);
+                this->insert(cp);
             }
         }
     }
@@ -124,183 +124,183 @@ namespace koto
     void TextAreaState::newline()
     {
         clamp_state(*this);
-        auto& line = text[cursor_row];
-        align_cursor_to_utf8(line, cursor_col);
+        auto& line = this->text[this->cursor_row];
+        align_cursor_to_utf8(line, this->cursor_col);
 
-        std::string right_part = line.substr(cursor_col);
-        line.erase(cursor_col);
-        text.insert(text.begin() + static_cast<std::ptrdiff_t>(cursor_row + 1), std::move(right_part));
+        std::string right_part = line.substr(this->cursor_col);
+        line.erase(this->cursor_col);
+        this->text.insert(this->text.begin() + static_cast<std::ptrdiff_t>(this->cursor_row + 1), std::move(right_part));
 
-        cursor_row++;
-        cursor_col = 0;
-        preferred_col = 0;
+        this->cursor_row++;
+        this->cursor_col = 0;
+        this->preferred_col = 0;
     }
 
     void TextAreaState::backspace()
     {
         clamp_state(*this);
-        auto& line = text[cursor_row];
+        auto& line = this->text[this->cursor_row];
 
-        if (cursor_col > 0)
+        if (this->cursor_col > 0)
         {
-            if (cursor_col > line.size())
+            if (this->cursor_col > line.size())
             {
-                cursor_col = line.size();
+                this->cursor_col = line.size();
             }
-            size_t prev = cursor_col - 1;
+            size_t prev = this->cursor_col - 1;
             while (prev > 0 && (static_cast<uint8_t>(line[prev]) & 0xC0) == 0x80)
             {
                 prev--;
             }
-            line.erase(prev, cursor_col - prev);
-            cursor_col = prev;
-            preferred_col = cursor_col;
+            line.erase(prev, this->cursor_col - prev);
+            this->cursor_col = prev;
+            this->preferred_col = this->cursor_col;
         }
-        else if (cursor_col == 0 && cursor_row > 0)
+        else if (this->cursor_col == 0 && this->cursor_row > 0)
         {
-            size_t prev_len = text[cursor_row - 1].size();
-            text[cursor_row - 1].append(line);
-            text.erase(text.begin() + static_cast<std::ptrdiff_t>(cursor_row));
-            cursor_row--;
-            cursor_col = prev_len;
-            preferred_col = cursor_col;
+            size_t prev_len = this->text[this->cursor_row - 1].size();
+            this->text[this->cursor_row - 1].append(line);
+            this->text.erase(this->text.begin() + static_cast<std::ptrdiff_t>(this->cursor_row));
+            this->cursor_row--;
+            this->cursor_col = prev_len;
+            this->preferred_col = this->cursor_col;
         }
     }
 
     void TextAreaState::delete_forward()
     {
         clamp_state(*this);
-        auto& line = text[cursor_row];
+        auto& line = this->text[this->cursor_row];
 
-        if (cursor_col < line.size())
+        if (this->cursor_col < line.size())
         {
-            size_t next = cursor_col + 1;
+            size_t next = this->cursor_col + 1;
             while (next < line.size() && (static_cast<uint8_t>(line[next]) & 0xC0) == 0x80)
             {
                 next++;
             }
-            line.erase(cursor_col, next - cursor_col);
+            line.erase(this->cursor_col, next - this->cursor_col);
         }
-        else if (cursor_col >= line.size() && cursor_row + 1 < text.size())
+        else if (this->cursor_col >= line.size() && this->cursor_row + 1 < this->text.size())
         {
-            line.append(text[cursor_row + 1]);
-            text.erase(text.begin() + static_cast<std::ptrdiff_t>(cursor_row + 1));
+            line.append(this->text[this->cursor_row + 1]);
+            this->text.erase(this->text.begin() + static_cast<std::ptrdiff_t>(this->cursor_row + 1));
         }
     }
 
     void TextAreaState::move_left()
     {
         clamp_state(*this);
-        if (cursor_col > 0)
+        if (this->cursor_col > 0)
         {
-            auto& line = text[cursor_row];
-            if (cursor_col > line.size())
+            auto& line = this->text[this->cursor_row];
+            if (this->cursor_col > line.size())
             {
-                cursor_col = line.size();
+                this->cursor_col = line.size();
             }
-            size_t prev = cursor_col - 1;
+            size_t prev = this->cursor_col - 1;
             while (prev > 0 && (static_cast<uint8_t>(line[prev]) & 0xC0) == 0x80)
             {
                 prev--;
             }
-            cursor_col = prev;
-            preferred_col = cursor_col;
+            this->cursor_col = prev;
+            this->preferred_col = this->cursor_col;
         }
-        else if (cursor_col == 0 && cursor_row > 0)
+        else if (this->cursor_col == 0 && this->cursor_row > 0)
         {
-            cursor_row--;
-            cursor_col = text[cursor_row].size();
-            preferred_col = cursor_col;
+            this->cursor_row--;
+            this->cursor_col = this->text[this->cursor_row].size();
+            this->preferred_col = this->cursor_col;
         }
     }
 
     void TextAreaState::move_right()
     {
         clamp_state(*this);
-        auto& line = text[cursor_row];
-        if (cursor_col < line.size())
+        auto& line = this->text[this->cursor_row];
+        if (this->cursor_col < line.size())
         {
-            size_t next = cursor_col + 1;
+            size_t next = this->cursor_col + 1;
             while (next < line.size() && (static_cast<uint8_t>(line[next]) & 0xC0) == 0x80)
             {
                 next++;
             }
-            cursor_col = next;
-            preferred_col = cursor_col;
+            this->cursor_col = next;
+            this->preferred_col = this->cursor_col;
         }
-        else if (cursor_col >= line.size() && cursor_row + 1 < text.size())
+        else if (this->cursor_col >= line.size() && this->cursor_row + 1 < this->text.size())
         {
-            cursor_row++;
-            cursor_col = 0;
-            preferred_col = cursor_col;
+            this->cursor_row++;
+            this->cursor_col = 0;
+            this->preferred_col = this->cursor_col;
         }
     }
 
     void TextAreaState::move_up()
     {
         clamp_state(*this);
-        if (cursor_row > 0)
+        if (this->cursor_row > 0)
         {
-            cursor_row--;
-            if (cursor_mode == CursorColumnMode::Sticky)
+            this->cursor_row--;
+            if (this->cursor_mode == CursorColumnMode::Sticky)
             {
-                cursor_col = std::min(preferred_col, text[cursor_row].size());
+                this->cursor_col = std::min(this->preferred_col, this->text[this->cursor_row].size());
             }
             else
             {
-                cursor_col = std::min(cursor_col, text[cursor_row].size());
-                preferred_col = cursor_col;
+                this->cursor_col = std::min(this->cursor_col, this->text[this->cursor_row].size());
+                this->preferred_col = this->cursor_col;
             }
-            align_cursor_to_utf8(text[cursor_row], cursor_col);
+            align_cursor_to_utf8(this->text[this->cursor_row], this->cursor_col);
         }
     }
 
     void TextAreaState::move_down()
     {
         clamp_state(*this);
-        if (cursor_row + 1 < text.size())
+        if (this->cursor_row + 1 < this->text.size())
         {
-            cursor_row++;
-            if (cursor_mode == CursorColumnMode::Sticky)
+            this->cursor_row++;
+            if (this->cursor_mode == CursorColumnMode::Sticky)
             {
-                cursor_col = std::min(preferred_col, text[cursor_row].size());
+                this->cursor_col = std::min(this->preferred_col, this->text[this->cursor_row].size());
             }
             else
             {
-                cursor_col = std::min(cursor_col, text[cursor_row].size());
-                preferred_col = cursor_col;
+                this->cursor_col = std::min(this->cursor_col, this->text[this->cursor_row].size());
+                this->preferred_col = this->cursor_col;
             }
-            align_cursor_to_utf8(text[cursor_row], cursor_col);
+            align_cursor_to_utf8(this->text[this->cursor_row], this->cursor_col);
         }
     }
 
     void TextAreaState::move_home()
     {
-        cursor_col = 0;
-        preferred_col = 0;
+        this->cursor_col = 0;
+        this->preferred_col = 0;
     }
 
     void TextAreaState::move_end()
     {
         clamp_state(*this);
-        cursor_col = text[cursor_row].size();
-        preferred_col = cursor_col;
+        this->cursor_col = this->text[this->cursor_row].size();
+        this->preferred_col = this->cursor_col;
     }
 
     void TextAreaState::clear()
     {
-        text.clear();
-        text.push_back("");
-        cursor_row = 0;
-        cursor_col = 0;
-        preferred_col = 0;
-        scroll_row = 0;
-        scroll_col = 0;
+        this->text.clear();
+        this->text.push_back("");
+        this->cursor_row = 0;
+        this->cursor_col = 0;
+        this->preferred_col = 0;
+        this->scroll_row = 0;
+        this->scroll_col = 0;
     }
 
     void TextAreaState::set_text(std::string_view new_text)
     {
-        text.clear();
+        this->text.clear();
         size_t start = 0;
         while (start < new_text.size())
         {
@@ -312,7 +312,7 @@ namespace koto
                 {
                     line.pop_back();
                 }
-                text.push_back(std::move(line));
+                this->text.push_back(std::move(line));
                 break;
             }
             std::string line(new_text.substr(start, end - start));
@@ -320,29 +320,29 @@ namespace koto
             {
                 line.pop_back();
             }
-            text.push_back(std::move(line));
+            this->text.push_back(std::move(line));
             start = end + 1;
         }
 
-        if (text.empty())
+        if (this->text.empty())
         {
-            text.push_back("");
+            this->text.push_back("");
         }
 
-        cursor_row = 0;
-        cursor_col = 0;
-        preferred_col = 0;
-        scroll_row = 0;
-        scroll_col = 0;
+        this->cursor_row = 0;
+        this->cursor_col = 0;
+        this->preferred_col = 0;
+        this->scroll_row = 0;
+        this->scroll_col = 0;
     }
 
     std::string TextAreaState::to_string() const
     {
         std::string result;
-        for (auto [i, line] : std::views::enumerate(text))
+        for (auto [i, line] : std::views::enumerate(this->text))
         {
             result.append(line);
-            if (static_cast<size_t>(i) + 1 < text.size())
+            if (static_cast<size_t>(i) + 1 < this->text.size())
             {
                 result.push_back('\n');
             }
@@ -354,57 +354,57 @@ namespace koto
     {
         if (key.is(Key::Up))
         {
-            move_up();
+            this->move_up();
             return true;
         }
         if (key.is(Key::Down))
         {
-            move_down();
+            this->move_down();
             return true;
         }
         if (key.is(Key::Left))
         {
-            move_left();
+            this->move_left();
             return true;
         }
         if (key.is(Key::Right))
         {
-            move_right();
+            this->move_right();
             return true;
         }
         if (key.is(Key::Home) || (key.ctrl && (key.ch == 'A' || key.ch == 'a')))
         {
-            move_home();
+            this->move_home();
             return true;
         }
         if (key.is(Key::End) || (key.ctrl && (key.ch == 'E' || key.ch == 'e')))
         {
-            move_end();
+            this->move_end();
             return true;
         }
         if (key.is(Key::Backspace))
         {
-            backspace();
+            this->backspace();
             return true;
         }
         if (key.is(Key::Delete))
         {
-            delete_forward();
+            this->delete_forward();
             return true;
         }
         if (key.is(Key::Enter))
         {
-            newline();
+            this->newline();
             return true;
         }
         if (key.is(Key::Tab))
         {
-            insert("    ");
+            this->insert("    ");
             return true;
         }
         if (!key.ctrl && !key.alt && key.is_char())
         {
-            insert(static_cast<char32_t>(key.ch));
+            this->insert(static_cast<char32_t>(key.ch));
             return true;
         }
 

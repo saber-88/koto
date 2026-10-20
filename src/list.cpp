@@ -19,133 +19,133 @@ namespace koto
 
     auto ListState::set_items(std::vector<std::string> new_items) -> void
     {
-        items = std::move(new_items);
-        if (items.empty())
+        this->items = std::move(new_items);
+        if (this->items.empty())
         {
-            selected = 0;
-            scroll = 0;
+            this->selected = 0;
+            this->scroll = 0;
         }
-        else if (selected >= static_cast<int>(items.size()))
+        else if (this->selected >= static_cast<int>(this->items.size()))
         {
-            selected = static_cast<int>(items.size()) - 1;
+            this->selected = static_cast<int>(this->items.size()) - 1;
         }
     }
 
     auto ListState::selected_item() const -> std::optional<std::string_view>
     {
-        if (selected >= 0 && selected < static_cast<int>(items.size()))
+        if (this->selected >= 0 && this->selected < static_cast<int>(this->items.size()))
         {
-            return std::string_view(items[static_cast<size_t>(selected)]);
+            return std::string_view(this->items[static_cast<size_t>(this->selected)]);
         }
         return std::nullopt;
     }
 
     auto ListState::selected_item_ptr() const -> const std::string*
     {
-        if (selected >= 0 && selected < static_cast<int>(items.size()))
+        if (this->selected >= 0 && this->selected < static_cast<int>(this->items.size()))
         {
-            return &items[static_cast<size_t>(selected)];
+            return &this->items[static_cast<size_t>(this->selected)];
         }
         return nullptr;
     }
 
     auto ListState::set_selected(int index) -> void
     {
-        if (items.empty())
+        if (this->items.empty())
         {
-            selected = 0;
+            this->selected = 0;
             return;
         }
 
-        int size = static_cast<int>(items.size());
-        if (navigation == ListNavigation::Wrap)
+        int size = static_cast<int>(this->items.size());
+        if (this->navigation == ListNavigation::Wrap)
         {
             if (index >= size)
             {
-                selected = 0;
+                this->selected = 0;
             }
             else if (index < 0)
             {
-                selected = size - 1;
+                this->selected = size - 1;
             }
             else
             {
-                selected = index;
+                this->selected = index;
             }
         }
         else
         {
-            selected = std::clamp(index, 0, size - 1);
+            this->selected = std::clamp(index, 0, size - 1);
         }
 
-        if (on_change)
+        if (this->on_change)
         {
-            on_change(selected, items[static_cast<size_t>(selected)]);
+            this->on_change(this->selected, this->items[static_cast<size_t>(this->selected)]);
         }
     }
 
     auto ListState::select_next() -> void
     {
-        if (items.empty()) return;
-        int size = static_cast<int>(items.size());
-        if (navigation == ListNavigation::Wrap)
+        if (this->items.empty()) return;
+        int size = static_cast<int>(this->items.size());
+        if (this->navigation == ListNavigation::Wrap)
         {
-            set_selected((selected + 1) % size);
+            this->set_selected((this->selected + 1) % size);
         }
         else
         {
-            set_selected(std::min(selected + 1, size - 1));
+            this->set_selected(std::min(this->selected + 1, size - 1));
         }
     }
 
     auto ListState::select_prev() -> void
     {
-        if (items.empty()) return;
-        int size = static_cast<int>(items.size());
-        if (navigation == ListNavigation::Wrap)
+        if (this->items.empty()) return;
+        int size = static_cast<int>(this->items.size());
+        if (this->navigation == ListNavigation::Wrap)
         {
-            set_selected((selected - 1 + size) % size);
+            this->set_selected((this->selected - 1 + size) % size);
         }
         else
         {
-            set_selected(std::max(selected - 1, 0));
+            this->set_selected(std::max(this->selected - 1, 0));
         }
     }
 
     auto ListState::select_first() -> void
     {
-        if (items.empty()) return;
-        set_selected(0);
+        if (this->items.empty()) return;
+        this->set_selected(0);
     }
 
     auto ListState::select_last() -> void
     {
-        if (items.empty()) return;
-        set_selected(static_cast<int>(items.size()) - 1);
+        if (this->items.empty()) return;
+        this->set_selected(static_cast<int>(this->items.size()) - 1);
     }
 
     auto ListState::handle_event(const KeyEvent& key) -> bool
     {
-        if (items.empty()) return false;
+        if (this->items.empty()) return false;
 
         if (key.ch == 'j' || key.is(Key::Down))
         {
-            select_next();
+            this->select_next();
             return true;
         }
         if (key.ch == 'k' || key.is(Key::Up))
         {
-            select_prev();
+            this->select_prev();
             return true;
         }
         if (key.ch == 'g' || key.is(Key::Home))
         {
-            select_first();
+            this->select_first();
             return true;
         }
         if (key.ch == 'G' || key.is(Key::End))
         {
-            select_last();
+            this->select_last();
             return true;
         }
 
