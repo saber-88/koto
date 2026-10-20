@@ -658,6 +658,82 @@ void test_cpp23_modernizations()
     std::cout << "PASSED\n";
 }
 
+void test_zero_overhead_modernizations()
+{
+    std::cout << "[Test 16] Zero-overhead modernizations (string_view stream decoding, optional returns, null-safe State&)... ";
+
+    // 1. UTF-8 next_codepoint(std::string_view&) stream decoding
+    {
+        std::string_view stream = "A★\xF0\x9F\x8C\x9F" "B"; // 'A', U'★', U'🌟' (U+1F31F), 'B'
+        char32_t cp1 = next_codepoint(stream);
+        assert(cp1 == U'A');
+        char32_t cp2 = next_codepoint(stream);
+        assert(cp2 == U'★');
+        char32_t cp3 = next_codepoint(stream);
+        assert(cp3 == 0x1F31F);
+        char32_t cp4 = next_codepoint(stream);
+        assert(cp4 == U'B');
+        assert(stream.empty());
+    }
+
+    // 2. UTF-8 encode_utf8(char32_t) returning Utf8Buffer value
+    {
+        auto buf1 = encode_utf8(U'A');
+        assert(buf1.size == 1);
+        assert(buf1.view() == "A");
+
+        auto buf2 = encode_utf8(U'★');
+        assert(buf2.size == 3);
+        assert(buf2.view() == "★");
+
+        auto buf3 = encode_utf8(0x1F31F);
+        assert(buf3.size == 4);
+        assert(buf3.view() == "\xF0\x9F\x8C\x9F");
+    }
+
+    // 3. ListState::selected_item() returning std::optional<std::string_view>
+    {
+        ListState empty_state;
+        assert(!empty_state.selected_item().has_value());
+        assert(empty_state.selected_item_ptr() == nullptr);
+
+        ListState state({"main.cpp", "include/", "CMakeLists.txt"});
+        state.selected = 1;
+        auto item = state.selected_item();
+        assert(item.has_value());
+        assert(*item == "include/");
+        assert(item.value() == "include/");
+        assert(state.selected_item_ptr() != nullptr && *state.selected_item_ptr() == "include/");
+    }
+
+    // 4. TabsState::selected_title() returning std::optional<std::string_view>
+    {
+        TabsState empty_tabs;
+        assert(!empty_tabs.selected_title().has_value());
+        assert(empty_tabs.selected_title_ptr() == nullptr);
+
+        TabsState tabs({"Editor", "Terminal", "Output"}, 0);
+        auto title = tabs.selected_title();
+        assert(title.has_value());
+        assert(*title == "Editor");
+        assert(tabs.selected_title_ptr() != nullptr && *tabs.selected_title_ptr() == "Editor");
+    }
+
+    // 5. TextInput & List null-safe references
+    {
+        Frame frame(3, 20);
+        TextInputState tis("hello world");
+        TextInput ti(tis);
+        ti.draw(frame, frame.area());
+
+        ListState ls({"Item 1", "Item 2"});
+        List l(ls);
+        l.draw(frame, frame.area());
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -679,9 +755,10 @@ int main()
     test_tabs();
     test_kitty_keyboard_and_paste();
     test_cpp23_modernizations();
+    test_zero_overhead_modernizations();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 15 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 16 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

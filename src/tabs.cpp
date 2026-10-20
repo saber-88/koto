@@ -127,7 +127,16 @@ namespace koto
         return false;
     }
 
-    const std::string* TabsState::selected_title() const
+    std::optional<std::string_view> TabsState::selected_title() const
+    {
+        if (selected < titles.size())
+        {
+            return std::string_view(titles[selected]);
+        }
+        return std::nullopt;
+    }
+
+    const std::string* TabsState::selected_title_ptr() const
     {
         if (selected < titles.size())
         {
@@ -291,11 +300,10 @@ namespace koto
         int active_end_col = -1;
 
         auto print_text = [&](std::string_view text, uint32_t fg_col, uint32_t bg_col) {
-            const char* ptr = text.data();
-            const char* const end = ptr + text.size();
-            while (ptr < end && cur_col < inner.right())
+            std::string_view rem = text;
+            while (!rem.empty() && cur_col < inner.right())
             {
-                char32_t cp = next_codepoint(ptr, end);
+                char32_t cp = next_codepoint(rem);
                 int w = codepoint_width(cp);
                 if (cur_col + w <= inner.right())
                 {

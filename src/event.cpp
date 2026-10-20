@@ -377,12 +377,12 @@ namespace koto
             }
 
             // Alt + multi-byte UTF-8
-            const char* ptr = in.data() + 1;
-            const char* end = in.data() + in.size();
-            char32_t cp = next_codepoint(ptr, end);
+            std::string_view alt_body = in.substr(1);
+            size_t before_len = alt_body.size();
+            char32_t cp = next_codepoint(alt_body);
             if (cp != 0)
             {
-                size_t utf8_len = static_cast<size_t>(ptr - (in.data() + 1));
+                size_t utf8_len = before_len - alt_body.size();
                 in.remove_prefix(1 + utf8_len);
                 return KeyEvent{static_cast<uint32_t>(cp), false, false, true, false};
             }
@@ -444,13 +444,9 @@ namespace koto
         }
 
         // Multi-byte UTF-8
-        const char* ptr = in.data();
-        const char* end = in.data() + in.size();
-        char32_t cp = next_codepoint(ptr, end);
+        char32_t cp = next_codepoint(in);
         if (cp != 0)
         {
-            size_t consumed = static_cast<size_t>(ptr - in.data());
-            in.remove_prefix(consumed);
             return KeyEvent{static_cast<uint32_t>(cp)};
         }
 

@@ -31,7 +31,16 @@ namespace koto
         }
     }
 
-    auto ListState::selected_item() const -> const std::string*
+    auto ListState::selected_item() const -> std::optional<std::string_view>
+    {
+        if (selected >= 0 && selected < static_cast<int>(items.size()))
+        {
+            return std::string_view(items[static_cast<size_t>(selected)]);
+        }
+        return std::nullopt;
+    }
+
+    auto ListState::selected_item_ptr() const -> const std::string*
     {
         if (selected >= 0 && selected < static_cast<int>(items.size()))
         {
@@ -249,33 +258,30 @@ namespace koto
 
     void List::normalize_state()
     {
-        if (m_state == nullptr || m_state->items.empty())
+        if (m_state.items.empty())
         {
-            if (m_state)
-            {
-                m_state->selected = 0;
-                m_state->scroll = 0;
-            }
+            m_state.selected = 0;
+            m_state.scroll = 0;
             return;
         }
 
-        int size = static_cast<int>(m_state->items.size());
-        switch (m_state->navigation)
+        int size = static_cast<int>(m_state.items.size());
+        switch (m_state.navigation)
         {
             case ListNavigation::Clamp:
             {
-                m_state->selected = std::clamp(m_state->selected, 0, size - 1);
+                m_state.selected = std::clamp(m_state.selected, 0, size - 1);
                 break;
             }
             case ListNavigation::Wrap:
             {
-                if (m_state->selected >= size)
+                if (m_state.selected >= size)
                 {
-                    m_state->selected = 0;
+                    m_state.selected = 0;
                 }
-                else if (m_state->selected < 0)
+                else if (m_state.selected < 0)
                 {
-                    m_state->selected = size - 1;
+                    m_state.selected = size - 1;
                 }
                 break;
             }
@@ -284,7 +290,7 @@ namespace koto
 
     void List::draw(Frame& frame, Area area)
     {
-        if (!area.is_valid() || m_state == nullptr)
+        if (!area.is_valid())
         {
             return;
         }
@@ -302,7 +308,7 @@ namespace koto
 
         Area inner = (m_border_style == BorderStyle::None) ? area : area.inset(1, 1, 1, 1);
         
-        if (!inner.is_valid() || m_state->items.empty())
+        if (!inner.is_valid() || m_state.items.empty())
         {
             return;    
         }
@@ -311,26 +317,26 @@ namespace koto
 
         this->normalize_state();
 
-        if (m_state->selected < m_state->scroll)
+        if (m_state.selected < m_state.scroll)
         {
-            m_state->scroll = m_state->selected;
+            m_state.scroll = m_state.selected;
         }
 
-        if (m_state->selected >= m_state->scroll + visible_rows)
+        if (m_state.selected >= m_state.scroll + visible_rows)
         {
-            m_state->scroll = m_state->selected - visible_rows + 1;
+            m_state.scroll = m_state.selected - visible_rows + 1;
         }
 
         for (int i = 0; i < visible_rows; i++)
         {
-            int item_idx = i + m_state->scroll;
-            if (item_idx >= static_cast<int>(m_state->items.size()))
+            int item_idx = i + m_state.scroll;
+            if (item_idx >= static_cast<int>(m_state.items.size()))
             {
                 break;
             }
 
             Area row_area = inner.set_row(inner.row + i).set_height(1);
-            bool is_selected = (m_state->selected == item_idx);
+            bool is_selected = (m_state.selected == item_idx);
 
             uint32_t current_fg = is_selected ? m_highlighted_fg : m_fg;
             uint32_t current_bg = is_selected ? m_highlighted_bg : m_bg;
@@ -349,17 +355,17 @@ namespace koto
             {
                 if (is_selected)
                 {
-                    line_text = m_highlight_symbol + m_state->items[static_cast<size_t>(item_idx)];
+                    line_text = m_highlight_symbol + m_state.items[static_cast<size_t>(item_idx)];
                 }
                 else
                 {
                     int sym_w = text_width(m_highlight_symbol);
-                    line_text = std::string(static_cast<size_t>(sym_w > 0 ? sym_w : 0), ' ') + m_state->items[static_cast<size_t>(item_idx)];
+                    line_text = std::string(static_cast<size_t>(sym_w > 0 ? sym_w : 0), ' ') + m_state.items[static_cast<size_t>(item_idx)];
                 }
             }
             else
             {
-                line_text = m_state->items[static_cast<size_t>(item_idx)];
+                line_text = m_state.items[static_cast<size_t>(item_idx)];
             }
 
             Text(line_text)

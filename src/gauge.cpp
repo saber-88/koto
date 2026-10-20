@@ -168,25 +168,18 @@ namespace koto
         // Draw centered label if provided
         if (!m_label.empty())
         {
-            int label_w = 0;
-            const char* p = m_label.data();
-            const char* const end = p + m_label.size();
-            while (p < end)
-            {
-                char32_t cp = next_codepoint(p, end);
-                label_w += codepoint_width(cp);
-            }
+            int label_w = text_width(m_label);
 
             if (label_w <= area.width)
             {
                 int label_start_col = area.col + (area.width - label_w) / 2;
                 int label_row = area.row + (area.height - 1) / 2;
 
-                p = m_label.data();
+                std::string_view remaining = m_label;
                 int c = label_start_col;
-                while (p < end && c < area.right())
+                while (!remaining.empty() && c < area.right())
                 {
-                    char32_t cp = next_codepoint(p, end);
+                    char32_t cp = next_codepoint(remaining);
                     int w = codepoint_width(cp);
 
                     // Preserve existing background cell color under the label

@@ -72,7 +72,7 @@ namespace koto
             void draw(Frame& frame, Area area) override;
 
         private:
-            TextInputState* m_state = nullptr;
+            TextInputState& m_state;
             std::string m_placeholder;
             std::string m_title;
             BorderStyle m_border_style = BorderStyle::Single;

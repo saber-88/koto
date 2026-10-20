@@ -119,14 +119,7 @@ namespace koto
 
         // Add padding around title: " Title "
         std::string padded = " " + m_title + " ";
-        int title_w = 0;
-        const char* p = padded.data();
-        const char* const end = p + padded.size();
-        while (p < end)
-        {
-            char32_t cp = next_codepoint(p, end);
-            title_w += codepoint_width(cp);
-        }
+        int title_w = text_width(padded);
 
         if (title_w > area.width)
         {
@@ -153,11 +146,11 @@ namespace koto
         uint32_t t_fg = (m_title_fg != COLOR_DEFAULT) ? m_title_fg : m_fg;
         uint32_t t_bg = (m_title_bg != COLOR_DEFAULT) ? m_title_bg : m_bg;
 
-        p = padded.data();
+        std::string_view remaining = padded;
         int col = start_col;
-        while (p < end && col < area.right())
+        while (!remaining.empty() && col < area.right())
         {
-            char32_t cp = next_codepoint(p, end);
+            char32_t cp = next_codepoint(remaining);
             int w = codepoint_width(cp);
             frame.set_cell(row, col, {cp, t_fg, t_bg});
             col += w;

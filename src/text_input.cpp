@@ -57,28 +57,25 @@ namespace koto
             return false;
         }
 
-        char utf8_buf[5] = {};
-        int len = encode_utf8(cp, utf8_buf);
-        if (len <= 0)
+        auto encoded = encode_utf8(cp);
+        if (encoded.size == 0)
         {
             return false;
         }
 
         cursor = std::min(cursor, value.size());
-        value.insert(cursor, utf8_buf, static_cast<size_t>(len));
-        cursor += static_cast<size_t>(len);
+        value.insert(cursor, encoded.view());
+        cursor += encoded.size;
         return true;
     }
 
     auto TextInputState::insert(std::string_view text) -> bool
     {
-        const char* ptr = text.data();
-        const char* end = ptr + text.size();
         bool changed = false;
-
-        while (ptr < end)
+        std::string_view remaining = text;
+        while (!remaining.empty())
         {
-            char32_t cp = next_codepoint(ptr, end);
+            char32_t cp = next_codepoint(remaining);
             if (cp != 0)
             {
                 changed |= insert(cp);
@@ -263,7 +260,7 @@ namespace koto
     }
 
     TextInput::TextInput(TextInputState& state)
-        : m_state(&state)
+        : m_state(state)
     {}
 
     TextInput& TextInput::placeholder(std::string_view placeholder)
@@ -344,7 +341,7 @@ namespace koto
         // Draw border or clear inner area
         if (m_border_style != BorderStyle::None)
         {
-            uint32_t border_color = (m_state && m_state->focused) ? m_focused_border_fg : m_fg;
+            uint32_t border_color = m_state.focused ? m_focused_border_fg : m_fg;
             Box()
                 .border_style(m_border_style)
                 .fg(border_color)
@@ -375,7 +372,7 @@ namespace koto
         int row = inner.row;
 
         // Empty text: show placeholder if available, set cursor
-        if (m_state == nullptr || m_state->value.empty())
+        if (m_state.value.empty())
         {
             if (!m_placeholder.empty())
             {
@@ -386,7 +383,7 @@ namespace koto
                     .draw(frame, inner);
             }
 
-            if (m_state && m_state->focused)
+            if (m_state.focused)
             {
                 frame.set_cursor(row, inner.col);
             }
@@ -394,7 +391,7 @@ namespace koto
         }
 
         // Measure visual character positions and determine cursor column
-        m_state->cursor = std::min(m_state->cursor, m_state->value.size());
+        m_state.cursor = std::min(m_state.cursor, m_state.value.size());
 
         struct VisualChar
         {
@@ -407,45 +404,43 @@ namespace koto
         int cur_col = 0;
         int cursor_visual_col = 0;
 
-        const char* ptr = m_state->value.data();
-        const char* end = ptr + m_state->value.size();
-
-        while (ptr < end)
+        std::string_view remaining = m_state.value;
+        while (!remaining.empty())
         {
-            size_t byte_idx = static_cast<size_t>(ptr - m_state->value.data());
-            if (byte_idx == m_state->cursor)
+            size_t byte_idx = static_cast<size_t>(remaining.data() - m_state.value.data());
+            if (byte_idx == m_state.cursor)
             {
                 cursor_visual_col = cur_col;
             }
-            char32_t cp = next_codepoint(ptr, end);
+            char32_t cp = next_codepoint(remaining);
             int w = codepoint_width(cp);
             chars.push_back({cp, cur_col, w});
             cur_col += w;
         }
 
-        if (m_state->cursor >= m_state->value.size())
+        if (m_state.cursor >= m_state.value.size())
         {
             cursor_visual_col = cur_col;
         }
 
         // Horizontal scroll adjustment
-        if (cursor_visual_col < m_state->scroll_offset)
+        if (cursor_visual_col < m_state.scroll_offset)
         {
-            m_state->scroll_offset = cursor_visual_col;
+            m_state.scroll_offset = cursor_visual_col;
         }
-        if (cursor_visual_col >= m_state->scroll_offset + inner.width)
+        if (cursor_visual_col >= m_state.scroll_offset + inner.width)
         {
-            m_state->scroll_offset = cursor_visual_col - inner.width + 1;
+            m_state.scroll_offset = cursor_visual_col - inner.width + 1;
         }
-        if (m_state->scroll_offset < 0)
+        if (m_state.scroll_offset < 0)
         {
-            m_state->scroll_offset = 0;
+            m_state.scroll_offset = 0;
         }
 
         // Draw visible characters
         for (const auto& ch : chars)
         {
-            int screen_col = inner.col + (ch.col_start - m_state->scroll_offset);
+            int screen_col = inner.col + (ch.col_start - m_state.scroll_offset);
             if (screen_col >= inner.col && screen_col + ch.width <= inner.right())
             {
                 frame.set_cell(row, screen_col, {ch.cp, m_fg, m_bg});
@@ -453,9 +448,9 @@ namespace koto
         }
 
         // Position hardware cursor
-        if (m_state->focused)
+        if (m_state.focused)
         {
-            int cursor_screen_col = inner.col + (cursor_visual_col - m_state->scroll_offset);
+            int cursor_screen_col = inner.col + (cursor_visual_col - m_state.scroll_offset);
             if (cursor_screen_col >= inner.col && cursor_screen_col < inner.right())
             {
                 frame.set_cursor(row, cursor_screen_col);

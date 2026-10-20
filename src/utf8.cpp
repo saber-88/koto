@@ -7,46 +7,61 @@
 
 namespace koto
 {
-    char32_t next_codepoint(const char*& ptr, const char* end)
+    char32_t next_codepoint(std::string_view& in)
     {
-        if (ptr >= end) return 0;
+        if (in.empty()) return 0;
 
-        uint8_t byte = static_cast<uint8_t>(*ptr);
-
-        auto remaining = [&]() { return static_cast<int>(end - ptr); };
+        uint8_t byte = static_cast<uint8_t>(in[0]);
 
         if (byte < 0x80)
         {
-            ptr += 1;
+            in.remove_prefix(1);
             return byte;
         }
         else if (byte < 0xE0)
         {
-            if (remaining() < 2) { ptr = end; return U'\uFFFD'; }
+            if (in.size() < 2) { in = {}; return U'\uFFFD'; }
             char32_t cp = static_cast<char32_t>((byte & 0x1F) << 6);
-            cp |= (static_cast<uint8_t>(ptr[1]) & 0x3F);
-            ptr += 2;
+            cp |= (static_cast<uint8_t>(in[1]) & 0x3F);
+            in.remove_prefix(2);
             return cp;
         }
         else if (byte < 0xF0)
         {
-            if (remaining() < 3) { ptr = end; return U'\uFFFD'; }
+            if (in.size() < 3) { in = {}; return U'\uFFFD'; }
             char32_t cp = static_cast<char32_t>((byte & 0x0F) << 12);
-            cp |= static_cast<char32_t>((static_cast<uint8_t>(ptr[1]) & 0x3F) << 6);
-            cp |= static_cast<char32_t>(static_cast<uint8_t>(ptr[2]) & 0x3F);
-            ptr += 3;
+            cp |= static_cast<char32_t>((static_cast<uint8_t>(in[1]) & 0x3F) << 6);
+            cp |= static_cast<char32_t>(static_cast<uint8_t>(in[2]) & 0x3F);
+            in.remove_prefix(3);
             return cp;
         }
         else
         {
-            if (remaining() < 4) { ptr = end; return U'\uFFFD'; }
+            if (in.size() < 4) { in = {}; return U'\uFFFD'; }
             char32_t cp = static_cast<char32_t>((byte & 0x07) << 18);
-            cp |= static_cast<char32_t>((static_cast<uint8_t>(ptr[1]) & 0x3F) << 12);
-            cp |= static_cast<char32_t>((static_cast<uint8_t>(ptr[2]) & 0x3F) << 6);
-            cp |= static_cast<char32_t>(static_cast<uint8_t>(ptr[3]) & 0x3F);
-            ptr += 4;
+            cp |= static_cast<char32_t>((static_cast<uint8_t>(in[1]) & 0x3F) << 12);
+            cp |= static_cast<char32_t>((static_cast<uint8_t>(in[2]) & 0x3F) << 6);
+            cp |= static_cast<char32_t>(static_cast<uint8_t>(in[3]) & 0x3F);
+            in.remove_prefix(4);
             return cp;
         }
+    }
+
+    char32_t next_codepoint(const char*& ptr, const char* end)
+    {
+        if (ptr >= end) return 0;
+        std::string_view sv(ptr, static_cast<size_t>(end - ptr));
+        char32_t cp = next_codepoint(sv);
+        ptr = sv.data();
+        return cp;
+    }
+
+    Utf8Buffer encode_utf8(char32_t code)
+    {
+        Utf8Buffer buf{};
+        int len = encode_utf8(code, buf.data);
+        buf.size = len > 0 ? static_cast<uint8_t>(len) : static_cast<uint8_t>(0);
+        return buf;
     }
 
     int encode_utf8(char32_t code , char* utf8)
@@ -153,13 +168,10 @@ namespace koto
     int text_width(std::string_view text)
     {
         int width = 0;
-
-        const char* ptr = text.data();
-        const char* end = ptr + text.size();
-
-        while(ptr < end)
+        std::string_view rem = text;
+        while (!rem.empty())
         {
-            width += codepoint_width(next_codepoint(ptr, end));
+            width += codepoint_width(next_codepoint(rem));
         }
         return width;
     }

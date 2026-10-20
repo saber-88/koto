@@ -8,6 +8,7 @@
 #include "koto/event.hpp"
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string_view>
 #include <string>
 #include <vector>
@@ -39,7 +40,8 @@ namespace koto
 
         auto handle_event(const KeyEvent& key) -> bool;
         auto set_items(std::vector<std::string> new_items) -> void;
-        auto selected_item() const -> const std::string*;
+        auto selected_item() const -> std::optional<std::string_view>;
+        auto selected_item_ptr() const -> const std::string*;
     };
     
     class List : public Widget
@@ -65,10 +67,10 @@ namespace koto
             List& title_align(TitleAlign align);
             List& overflow(TextOverflow o);
             void draw(Frame &frame, Area area) override;
-            explicit List(ListState& state) : m_state(&state) {}
+            explicit List(ListState& state) : m_state(state) {}
 
         private:
-            ListState* m_state = nullptr;
+            ListState& m_state;
             uint32_t m_fg = COLOR_DEFAULT;
             uint32_t m_bg = COLOR_DEFAULT;
             uint32_t m_highlighted_fg = COLOR_DEFAULT;

@@ -85,11 +85,10 @@ namespace koto
                 }
                 else if (m_key_handler)
                 {
-                    const char* ptr = paste->text.data();
-                    const char* end = ptr + paste->text.size();
-                    while (ptr < end)
+                    std::string_view remaining = paste->text;
+                    while (!remaining.empty())
                     {
-                        char32_t cp = next_codepoint(ptr, end);
+                        char32_t cp = next_codepoint(remaining);
                         if (cp != 0)
                         {
                             KeyEvent ke{};

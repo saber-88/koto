@@ -31,16 +31,8 @@ namespace koto
         // Computes the visual terminal column corresponding to byte_pos in line
         int compute_visual_col(const std::string& line, size_t byte_pos)
         {
-            int visual_col = 0;
-            const char* ptr = line.data();
-            const char* const end = ptr + std::min(byte_pos, line.size());
-
-            while (ptr < end)
-            {
-                char32_t cp = next_codepoint(ptr, end);
-                visual_col += codepoint_width(cp);
-            }
-            return visual_col;
+            std::string_view slice(line.data(), std::min(byte_pos, line.size()));
+            return text_width(slice);
         }
 
         void clamp_state(TextAreaState& state)
@@ -103,27 +95,25 @@ namespace koto
             return;
         }
 
-        char buf[5] = {};
-        int len = encode_utf8(cp, buf);
-        if (len <= 0)
+        auto encoded = encode_utf8(cp);
+        if (encoded.size == 0)
         {
             return;
         }
 
         auto& line = text[cursor_row];
         align_cursor_to_utf8(line, cursor_col);
-        line.insert(cursor_col, buf, static_cast<size_t>(len));
-        cursor_col += static_cast<size_t>(len);
+        line.insert(cursor_col, encoded.view());
+        cursor_col += encoded.size;
         preferred_col = cursor_col;
     }
 
     void TextAreaState::insert(std::string_view str)
     {
-        const char* ptr = str.data();
-        const char* const end = ptr + str.size();
-        while (ptr < end)
+        std::string_view remaining = str;
+        while (!remaining.empty())
         {
-            char32_t cp = next_codepoint(ptr, end);
+            char32_t cp = next_codepoint(remaining);
             if (cp != 0)
             {
                 insert(cp);
@@ -662,14 +652,12 @@ namespace koto
             // Draw line content
             if (line_idx < m_state.text.size())
             {
-                const auto& line = m_state.text[line_idx];
-                const char* ptr = line.data();
-                const char* const end = ptr + line.size();
+                std::string_view remaining = m_state.text[line_idx];
                 int cur_x = 0;
 
-                while (ptr < end)
+                while (!remaining.empty())
                 {
-                    char32_t cp = next_codepoint(ptr, end);
+                    char32_t cp = next_codepoint(remaining);
                     int w = codepoint_width(cp);
                     int rel_col = cur_x - static_cast<int>(m_state.scroll_col);
 

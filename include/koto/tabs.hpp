@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,7 +38,8 @@ namespace koto
         void select_last();
         void set_selected(size_t index);
         bool handle_event(const KeyEvent& key);
-        const std::string* selected_title() const;
+        std::optional<std::string_view> selected_title() const;
+        const std::string* selected_title_ptr() const;
     };
 
     class Tabs : public Widget
