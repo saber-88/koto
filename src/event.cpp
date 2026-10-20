@@ -29,24 +29,24 @@ namespace koto
         }
     }
 
-    static std::optional<KeyEvent> parse_csi(const char* buf, size_t len)
+    static std::optional<KeyEvent> parse_csi(std::string_view sv)
     {
         // Must start with "\033[" and have at least 3 characters
-        if (len < 3 || buf[0] != '\033' || buf[1] != '[')
+        if (sv.size() < 3 || sv[0] != '\033' || sv[1] != '[')
         {
             return std::nullopt;
         }
 
         // Shift+Tab: "\033[Z"
-        if (len == 3 && buf[2] == 'Z')
+        if (sv.size() == 3 && sv[2] == 'Z')
         {
             return KeyEvent{static_cast<uint32_t>(Key::BackTab), false, true, false, false};
         }
 
         // Standard unshifted arrows / home / end: "\033[A", "\033[B", "\033[C", "\033[D", "\033[H", "\033[F"
-        if (len == 3)
+        if (sv.size() == 3)
         {
-            switch (buf[2])
+            switch (sv[2])
             {
                 case 'A': return KeyEvent{static_cast<uint32_t>(Key::Up)};
                 case 'B': return KeyEvent{static_cast<uint32_t>(Key::Down)};
@@ -59,21 +59,22 @@ namespace koto
         }
 
         // Terminator is the last byte in the CSI sequence
-        char term = buf[len - 1];
+        char term = sv.back();
+        size_t len = sv.size();
 
-        // Parse parameters between buf[2] and buf[len - 1]
+        // Parse parameters between sv[2] and sv[len - 1]
         size_t i = 2;
         int p1 = 0;
         bool has_p1 = false;
-        while (i < len - 1 && buf[i] >= '0' && buf[i] <= '9')
+        while (i < len - 1 && sv[i] >= '0' && sv[i] <= '9')
         {
-            p1 = p1 * 10 + (buf[i] - '0');
+            p1 = p1 * 10 + (sv[i] - '0');
             has_p1 = true;
             i++;
         }
 
         // Skip any sub-parameters in p1 (e.g. p1:sub)
-        while (i < len - 1 && buf[i] != ';')
+        while (i < len - 1 && sv[i] != ';')
         {
             i++;
         }
@@ -82,24 +83,24 @@ namespace koto
         bool has_p2 = false;
         int event_type = 1; // 1 = press, 2 = repeat, 3 = release
 
-        if (i < len - 1 && buf[i] == ';')
+        if (i < len - 1 && sv[i] == ';')
         {
             i++;
-            while (i < len - 1 && buf[i] >= '0' && buf[i] <= '9')
+            while (i < len - 1 && sv[i] >= '0' && sv[i] <= '9')
             {
-                p2 = p2 * 10 + (buf[i] - '0');
+                p2 = p2 * 10 + (sv[i] - '0');
                 has_p2 = true;
                 i++;
             }
 
             // Check for sub-parameters in p2 (e.g. modifier:event_type)
-            if (i < len - 1 && buf[i] == ':')
+            if (i < len - 1 && sv[i] == ':')
             {
                 i++;
                 int ev = 0;
-                while (i < len - 1 && buf[i] >= '0' && buf[i] <= '9')
+                while (i < len - 1 && sv[i] >= '0' && sv[i] <= '9')
                 {
-                    ev = ev * 10 + (buf[i] - '0');
+                    ev = ev * 10 + (sv[i] - '0');
                     i++;
                 }
                 if (ev > 0)
@@ -237,15 +238,15 @@ namespace koto
         return std::nullopt;
     }
 
-    static std::optional<KeyEvent> parse_ss3(const char* buf, size_t len)
+    static std::optional<KeyEvent> parse_ss3(std::string_view sv)
     {
         // Must start with "\033O"
-        if (len < 3 || buf[0] != '\033' || buf[1] != 'O')
+        if (sv.size() < 3 || sv[0] != '\033' || sv[1] != 'O')
         {
             return std::nullopt;
         }
 
-        switch (buf[2])
+        switch (sv[2])
         {
             case 'A': return KeyEvent{static_cast<uint32_t>(Key::Up)};
             case 'B': return KeyEvent{static_cast<uint32_t>(Key::Down)};
@@ -328,7 +329,7 @@ namespace koto
                     size_t csi_len = i + 1;
                     std::string_view csi_str = in.substr(0, csi_len);
                     in.remove_prefix(csi_len);
-                    if (auto ke = parse_csi(csi_str.data(), csi_len))
+                    if (auto ke = parse_csi(csi_str))
                     {
                         return *ke;
                     }
@@ -345,7 +346,7 @@ namespace koto
                 {
                     std::string_view ss3_str = in.substr(0, 3);
                     in.remove_prefix(3);
-                    if (auto ke = parse_ss3(ss3_str.data(), 3))
+                    if (auto ke = parse_ss3(ss3_str))
                     {
                         return *ke;
                     }
