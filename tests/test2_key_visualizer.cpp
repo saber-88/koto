@@ -9,6 +9,7 @@ using namespace koto;
 static auto format_key_name(const KeyEvent& k) -> std::string
 {
     std::string prefix;
+    if (k.meta)  prefix += "Meta + ";
     if (k.ctrl)  prefix += "Ctrl + ";
     if (k.alt)   prefix += "Alt + ";
     if (k.shift && !k.is_char()) prefix += "Shift + ";

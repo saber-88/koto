@@ -23,6 +23,11 @@ namespace koto
 
             auto show_cursor() const -> void;
             auto hide_cursor() const -> void;
+
+            auto enable_bracketed_paste() const -> void;
+            auto disable_bracketed_paste() const -> void;
+            auto enable_kitty_keyboard() const -> void;
+            auto disable_kitty_keyboard() const -> void;
             
         private:
         

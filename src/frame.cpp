@@ -171,6 +171,9 @@ namespace koto
         // reserve a reasonable amount to avoid repeated realloc
         m_output.reserve(static_cast<size_t>(m_rows * m_cols * 4));
 
+        // DEC Mode 2026: Begin Synchronized Update (halts terminal rasterization for tear-free atomic render)
+        m_output.append("\033[?2026h");
+
         // sentinel that can't match any real cell color,
         // forces the first dirty cell to always emit SGR
         m_cur_fg = ~uint32_t(0);
@@ -223,6 +226,9 @@ namespace koto
         {
             m_output.append("\033[?25l");
         }
+
+        // DEC Mode 2026: End Synchronized Update (atomic render flush)
+        m_output.append("\033[?2026l");
 
         // flush entire frame in one write if attached to a terminal
         if (m_term != nullptr && !m_output.empty())

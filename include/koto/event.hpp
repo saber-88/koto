@@ -2,6 +2,8 @@
 
 #include <csignal>
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <variant>
 #include <unistd.h>
 
@@ -41,6 +43,7 @@ namespace koto
         bool ctrl = false;
         bool shift = false;
         bool alt = false;
+        bool meta = false;
 
         bool is(Key k) const {
             if (ch == static_cast<uint32_t>(k)) return true;
@@ -72,19 +75,27 @@ namespace koto
     struct TickEvent
     {};
 
-    struct Event : std::variant<KeyEvent, ResizeEvent, TickEvent>
+    struct PasteEvent
+    {
+        std::string text;
+    };
+
+    struct Event : std::variant<KeyEvent, ResizeEvent, TickEvent, PasteEvent>
     {
         using variant::variant;
 
         bool is_key() const { return std::holds_alternative<KeyEvent>(*this); }
         bool is_resize() const { return std::holds_alternative<ResizeEvent>(*this); }
         bool is_tick() const { return std::holds_alternative<TickEvent>(*this); }
+        bool is_paste() const { return std::holds_alternative<PasteEvent>(*this); }
 
         const KeyEvent* as_key() const { return std::get_if<KeyEvent>(this); }
         const ResizeEvent* as_resize() const { return std::get_if<ResizeEvent>(this); }
+        const PasteEvent* as_paste() const { return std::get_if<PasteEvent>(this); }
 
         const KeyEvent& key() const { return std::get<KeyEvent>(*this); }
         const ResizeEvent& resize() const { return std::get<ResizeEvent>(*this); }
+        const PasteEvent& paste() const { return std::get<PasteEvent>(*this); }
     };
 
 
@@ -100,13 +111,17 @@ namespace koto
 
             auto poll(std::int32_t ms = 16) -> Event;
 
+            // Direct buffer parser (useful for testing or feeding synthetic input streams)
+            static auto parse(std::string_view bytes) -> Event;
+
         private:
 
             int m_signal_fd = -1;
             sigset_t m_old_mask{};
+            std::string m_pending_input;
+
             auto on_resize() -> Event;
             auto parse_stdin() -> Event;
-            auto parse_escape(const char *buf, ssize_t n) -> Event;
 
     };
 }

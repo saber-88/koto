@@ -1,6 +1,7 @@
 #include "koto/app.hpp"
 #include "koto/event.hpp"
 #include "koto/frame.hpp"
+#include "koto/utf8.hpp"
 
 namespace koto
 {
@@ -13,6 +14,11 @@ namespace koto
     App& App::on_key(std::function<void(const KeyEvent&)> handler)
     {
         m_key_handler = std::move(handler);
+        return *this;
+    }
+    App& App::on_paste(std::function<void(const std::string&)> handler)
+    {
+        m_paste_handler = std::move(handler);
         return *this;
     }
     App& App::on_tick(std::function<void()> handler)
@@ -67,6 +73,44 @@ namespace koto
             {
                 m_frame.handle_resize(static_cast<int>(resize->rows),static_cast<int>(resize->cols));
                 m_needs_draw = true;
+                continue;
+            }
+
+            if (auto* paste = ev.as_paste())
+            {
+                if (m_paste_handler)
+                {
+                    m_paste_handler(paste->text);
+                    m_needs_draw = true;
+                }
+                else if (m_key_handler)
+                {
+                    const char* ptr = paste->text.data();
+                    const char* end = ptr + paste->text.size();
+                    while (ptr < end)
+                    {
+                        char32_t cp = next_codepoint(ptr, end);
+                        if (cp != 0)
+                        {
+                            KeyEvent ke{};
+                            if (cp == '\n')
+                            {
+                                ke.ch = static_cast<uint32_t>(Key::Enter);
+                            }
+                            else if (cp == '\t')
+                            {
+                                ke.ch = static_cast<uint32_t>(Key::Tab);
+                            }
+                            else
+                            {
+                                ke.ch = static_cast<uint32_t>(cp);
+                                if (cp >= 'A' && cp <= 'Z') ke.shift = true;
+                            }
+                            m_key_handler(ke);
+                        }
+                    }
+                    m_needs_draw = true;
+                }
                 continue;
             }
 

@@ -17,6 +17,7 @@ namespace koto
         App& operator=(const App&) = delete;
 
         App& on_key(std::function<void(const KeyEvent&)> handler);
+        App& on_paste(std::function<void(const std::string&)> handler);
         App& on_tick(std::function<void()> handler);
         App& on_render(std::function<void(Frame&)> handler);
 
@@ -33,6 +34,7 @@ namespace koto
             bool m_needs_draw = true;
 
             std::function<void(const KeyEvent&)> m_key_handler = nullptr;
+            std::function<void(const std::string&)> m_paste_handler = nullptr;
             std::function<void()> m_tick_handler = nullptr;
             std::function<void(Frame&)> m_render_handler = nullptr;
 

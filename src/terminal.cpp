@@ -22,12 +22,12 @@ namespace koto
 
     auto Terminal::restore_terminal() -> void
     {
-        
+        disable_kitty_keyboard();
+        disable_bracketed_paste();
         tcsetattr(STDIN_FILENO, TCSANOW, &og_terminal);
         show_cursor();
         exit_alt_screen();
         std::fflush(stdout);
-        
     }
 
     auto Terminal::enter_alt_screen() -> void
@@ -81,12 +81,40 @@ namespace koto
 
     }
 
+    auto Terminal::enable_bracketed_paste() const -> void
+    {
+        static_cast<void>(write(STDOUT_FILENO, "\033[?2004h", 8));
+        std::fflush(stdout);
+    }
+
+    auto Terminal::disable_bracketed_paste() const -> void
+    {
+        static_cast<void>(write(STDOUT_FILENO, "\033[?2004l", 8));
+        std::fflush(stdout);
+    }
+
+    auto Terminal::enable_kitty_keyboard() const -> void
+    {
+        // Push Kitty keyboard flags: 1 = DISAMBIGUATE_ESCAPE_CODES
+        static_cast<void>(write(STDOUT_FILENO, "\033[>1u", 5));
+        std::fflush(stdout);
+    }
+
+    auto Terminal::disable_kitty_keyboard() const -> void
+    {
+        // Pop Kitty keyboard flags
+        static_cast<void>(write(STDOUT_FILENO, "\033[<u", 4));
+        std::fflush(stdout);
+    }
+
     Terminal::Terminal()
     {
         
         set_dimensions();
         enter_raw_mode();
         enter_alt_screen();
+        enable_bracketed_paste();
+        enable_kitty_keyboard();
         
     }
 

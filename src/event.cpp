@@ -11,9 +11,13 @@
 
 namespace koto
 {
-    // Helper to decode XTerm modifier parameter: 1 + flags
-    // 2=Shift, 3=Alt, 4=Shift+Alt, 5=Ctrl, 6=Ctrl+Shift, 7=Ctrl+Alt, 8=Ctrl+Alt+Shift
-    static void decode_modifier(int mod_param, bool& shift, bool& alt, bool& ctrl)
+    // Helper to decode XTerm / Kitty modifier parameter: 1 + flags
+    // Bit 0: Shift (1)
+    // Bit 1: Alt (2)
+    // Bit 2: Ctrl (4)
+    // Bit 3: Super / Meta (8)
+    // Bit 5: Meta (32)
+    static void decode_modifier(int mod_param, bool& shift, bool& alt, bool& ctrl, bool& meta)
     {
         if (mod_param >= 2)
         {
@@ -21,12 +25,13 @@ namespace koto
             shift = (flags & 1) != 0;
             alt   = (flags & 2) != 0;
             ctrl  = (flags & 4) != 0;
+            meta  = (flags & 8) != 0 || (flags & 32) != 0;
         }
     }
 
     static std::optional<KeyEvent> parse_csi(const char* buf, size_t len)
     {
-        // Must start with "\033["
+        // Must start with "\033[" and have at least 3 characters
         if (len < 3 || buf[0] != '\033' || buf[1] != '[')
         {
             return std::nullopt;
@@ -35,7 +40,7 @@ namespace koto
         // Shift+Tab: "\033[Z"
         if (len == 3 && buf[2] == 'Z')
         {
-            return KeyEvent{static_cast<uint32_t>(Key::BackTab), false, true, false};
+            return KeyEvent{static_cast<uint32_t>(Key::BackTab), false, true, false, false};
         }
 
         // Standard unshifted arrows / home / end: "\033[A", "\033[B", "\033[C", "\033[D", "\033[H", "\033[F"
@@ -53,36 +58,67 @@ namespace koto
             }
         }
 
-        // Parameterized CSI: e.g. "\033[1;5A", "\033[15~", "\033[15;5~", "\033[13;2u"
+        // Terminator is the last byte in the CSI sequence
+        char term = buf[len - 1];
+
+        // Parse parameters between buf[2] and buf[len - 1]
         size_t i = 2;
         int p1 = 0;
         bool has_p1 = false;
-        while (i < len && buf[i] >= '0' && buf[i] <= '9')
+        while (i < len - 1 && buf[i] >= '0' && buf[i] <= '9')
         {
             p1 = p1 * 10 + (buf[i] - '0');
             has_p1 = true;
             i++;
         }
 
-        int p2 = 0;
-        bool has_p2 = false;
-        if (i < len && buf[i] == ';')
+        // Skip any sub-parameters in p1 (e.g. p1:sub)
+        while (i < len - 1 && buf[i] != ';')
         {
             i++;
-            while (i < len && buf[i] >= '0' && buf[i] <= '9')
+        }
+
+        int p2 = 0;
+        bool has_p2 = false;
+        int event_type = 1; // 1 = press, 2 = repeat, 3 = release
+
+        if (i < len - 1 && buf[i] == ';')
+        {
+            i++;
+            while (i < len - 1 && buf[i] >= '0' && buf[i] <= '9')
             {
                 p2 = p2 * 10 + (buf[i] - '0');
                 has_p2 = true;
                 i++;
             }
+
+            // Check for sub-parameters in p2 (e.g. modifier:event_type)
+            if (i < len - 1 && buf[i] == ':')
+            {
+                i++;
+                int ev = 0;
+                while (i < len - 1 && buf[i] >= '0' && buf[i] <= '9')
+                {
+                    ev = ev * 10 + (buf[i] - '0');
+                    i++;
+                }
+                if (ev > 0)
+                {
+                    event_type = ev;
+                }
+            }
         }
 
-        if (i >= len) return std::nullopt;
-        char term = buf[i];
+        // In Kitty keyboard protocol, event_type == 3 represents key release; ignore it
+        if (event_type == 3)
+        {
+            return std::nullopt;
+        }
 
         bool shift = false;
         bool alt = false;
         bool ctrl = false;
+        bool meta = false;
 
         // Check if terminator is letter A-D, H, F, P-S: e.g., "\033[1;5A"
         if (term == 'A' || term == 'B' || term == 'C' || term == 'D' ||
@@ -91,25 +127,25 @@ namespace koto
         {
             if (has_p2)
             {
-                decode_modifier(p2, shift, alt, ctrl);
+                decode_modifier(p2, shift, alt, ctrl, meta);
             }
             else if (has_p1)
             {
-                decode_modifier(p1, shift, alt, ctrl);
+                decode_modifier(p1, shift, alt, ctrl, meta);
             }
 
             switch (term)
             {
-                case 'A': return KeyEvent{static_cast<uint32_t>(Key::Up), ctrl, shift, alt};
-                case 'B': return KeyEvent{static_cast<uint32_t>(Key::Down), ctrl, shift, alt};
-                case 'C': return KeyEvent{static_cast<uint32_t>(Key::Right), ctrl, shift, alt};
-                case 'D': return KeyEvent{static_cast<uint32_t>(Key::Left), ctrl, shift, alt};
-                case 'H': return KeyEvent{static_cast<uint32_t>(Key::Home), ctrl, shift, alt};
-                case 'F': return KeyEvent{static_cast<uint32_t>(Key::End), ctrl, shift, alt};
-                case 'P': return KeyEvent{static_cast<uint32_t>(Key::F1), ctrl, shift, alt};
-                case 'Q': return KeyEvent{static_cast<uint32_t>(Key::F2), ctrl, shift, alt};
-                case 'R': return KeyEvent{static_cast<uint32_t>(Key::F3), ctrl, shift, alt};
-                case 'S': return KeyEvent{static_cast<uint32_t>(Key::F4), ctrl, shift, alt};
+                case 'A': return KeyEvent{static_cast<uint32_t>(Key::Up), ctrl, shift, alt, meta};
+                case 'B': return KeyEvent{static_cast<uint32_t>(Key::Down), ctrl, shift, alt, meta};
+                case 'C': return KeyEvent{static_cast<uint32_t>(Key::Right), ctrl, shift, alt, meta};
+                case 'D': return KeyEvent{static_cast<uint32_t>(Key::Left), ctrl, shift, alt, meta};
+                case 'H': return KeyEvent{static_cast<uint32_t>(Key::Home), ctrl, shift, alt, meta};
+                case 'F': return KeyEvent{static_cast<uint32_t>(Key::End), ctrl, shift, alt, meta};
+                case 'P': return KeyEvent{static_cast<uint32_t>(Key::F1), ctrl, shift, alt, meta};
+                case 'Q': return KeyEvent{static_cast<uint32_t>(Key::F2), ctrl, shift, alt, meta};
+                case 'R': return KeyEvent{static_cast<uint32_t>(Key::F3), ctrl, shift, alt, meta};
+                case 'S': return KeyEvent{static_cast<uint32_t>(Key::F4), ctrl, shift, alt, meta};
                 default: break;
             }
         }
@@ -119,7 +155,7 @@ namespace koto
         {
             if (has_p2)
             {
-                decode_modifier(p2, shift, alt, ctrl);
+                decode_modifier(p2, shift, alt, ctrl, meta);
             }
 
             Key k = Key::None;
@@ -147,23 +183,55 @@ namespace koto
             }
             if (k != Key::None)
             {
-                return KeyEvent{static_cast<uint32_t>(k), ctrl, shift, alt};
+                return KeyEvent{static_cast<uint32_t>(k), ctrl, shift, alt, meta};
             }
         }
 
-        // CSI u keyboard protocol (Kitty / WezTerm / Ghostty / foot): "\033[<codepoint>;<mod>u"
+        // Kitty Keyboard Protocol (CSI u): "\033[<codepoint>;<mod>u" or "\033[<codepoint>u"
         if (term == 'u' && has_p1)
         {
             if (has_p2)
             {
-                decode_modifier(p2, shift, alt, ctrl);
+                decode_modifier(p2, shift, alt, ctrl, meta);
             }
+
             uint32_t codepoint = static_cast<uint32_t>(p1);
-            if (codepoint == 13) return KeyEvent{static_cast<uint32_t>(Key::Enter), ctrl, shift, alt};
-            if (codepoint == 9)  return KeyEvent{static_cast<uint32_t>(Key::Tab), ctrl, shift, alt};
-            if (codepoint == 27) return KeyEvent{static_cast<uint32_t>(Key::Escape), ctrl, shift, alt};
-            if (codepoint == 127) return KeyEvent{static_cast<uint32_t>(Key::Backspace), ctrl, shift, alt};
-            return KeyEvent{codepoint, ctrl, shift, alt};
+
+            // Disambiguated control keys
+            if (codepoint == 13 || codepoint == 57414) return KeyEvent{static_cast<uint32_t>(Key::Enter), ctrl, shift, alt, meta};
+            if (codepoint == 9)                       return KeyEvent{static_cast<uint32_t>(Key::Tab), ctrl, shift, alt, meta};
+            if (codepoint == 27)                      return KeyEvent{static_cast<uint32_t>(Key::Escape), ctrl, shift, alt, meta};
+            if (codepoint == 127)                     return KeyEvent{static_cast<uint32_t>(Key::Backspace), ctrl, shift, alt, meta};
+
+            // Kitty functional key mappings (Private Use Area)
+            if (codepoint == 57417) return KeyEvent{static_cast<uint32_t>(Key::Left), ctrl, shift, alt, meta};
+            if (codepoint == 57418) return KeyEvent{static_cast<uint32_t>(Key::Right), ctrl, shift, alt, meta};
+            if (codepoint == 57419) return KeyEvent{static_cast<uint32_t>(Key::Up), ctrl, shift, alt, meta};
+            if (codepoint == 57420) return KeyEvent{static_cast<uint32_t>(Key::Down), ctrl, shift, alt, meta};
+            if (codepoint == 57421) return KeyEvent{static_cast<uint32_t>(Key::PageUp), ctrl, shift, alt, meta};
+            if (codepoint == 57422) return KeyEvent{static_cast<uint32_t>(Key::PageDown), ctrl, shift, alt, meta};
+            if (codepoint == 57423) return KeyEvent{static_cast<uint32_t>(Key::Home), ctrl, shift, alt, meta};
+            if (codepoint == 57424) return KeyEvent{static_cast<uint32_t>(Key::End), ctrl, shift, alt, meta};
+            if (codepoint == 57425) return KeyEvent{static_cast<uint32_t>(Key::Insert), ctrl, shift, alt, meta};
+            if (codepoint == 57426) return KeyEvent{static_cast<uint32_t>(Key::Delete), ctrl, shift, alt, meta};
+
+            // Ignore standalone lock/modifier key events
+            if ((codepoint >= 57358 && codepoint <= 57363) || (codepoint >= 57441 && codepoint <= 57454))
+            {
+                return std::nullopt;
+            }
+
+            // Normalize Ctrl+letter to uppercase to match standard terminal conventions
+            if (ctrl && codepoint >= 'a' && codepoint <= 'z')
+            {
+                codepoint = codepoint - 'a' + 'A';
+            }
+            else if (shift && !ctrl && codepoint >= 'a' && codepoint <= 'z')
+            {
+                codepoint = codepoint - 'a' + 'A';
+            }
+
+            return KeyEvent{codepoint, ctrl, shift, alt, meta};
         }
 
         return std::nullopt;
@@ -194,150 +262,276 @@ namespace koto
         return std::nullopt;
     }
 
-    auto EventLoop::parse_escape(const char *buf, ssize_t n) -> Event
+    static auto parse_event_internal(std::string_view& in) -> Event
     {
-        size_t len = static_cast<size_t>(n);
-        if (len >= 2 && buf[1] == '[')
-        {
-            if (auto ke = parse_csi(buf, len))
-            {
-                return *ke;
-            }
-        }
-        else if (len >= 2 && buf[1] == 'O')
-        {
-            if (auto ke = parse_ss3(buf, len))
-            {
-                return *ke;
-            }
-        }
-
-        // Alt + key (single byte after \033)
-        if (len == 2)
-        {
-            char c = buf[1];
-            if (c == '\r' || c == '\n') return KeyEvent{static_cast<uint32_t>(Key::Enter), false, false, true};
-            if (c == '\t') return KeyEvent{static_cast<uint32_t>(Key::Tab), false, false, true};
-            if (c == 127 || c == 8) return KeyEvent{static_cast<uint32_t>(Key::Backspace), false, false, true};
-            if (c == '\033') return KeyEvent{static_cast<uint32_t>(Key::Escape), false, false, true};
-            if (c >= 'A' && c <= 'Z')
-            {
-                return KeyEvent{static_cast<uint32_t>(c), false, true, true};
-            }
-            if (c >= 32)
-            {
-                return KeyEvent{static_cast<uint32_t>(c), false, false, true};
-            }
-        }
-
-        // Alt + multi-byte UTF-8 character
-        if (len > 2 && buf[1] != '[' && buf[1] != 'O')
-        {
-            const char* ptr = buf + 1;
-            const char* end = buf + static_cast<size_t>(n);
-            char32_t cp = next_codepoint(ptr, end);
-            if (cp != 0)
-            {
-                return KeyEvent{static_cast<uint32_t>(cp), false, false, true};
-            }
-        }
-
-        return TickEvent{};
-    }
-
-    auto EventLoop::parse_stdin() -> Event
-    {
-        char buf[64] = {};
-        ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
-
-        if (n <= 0)
+        if (in.empty())
         {
             return TickEvent{};
         }
 
-        // If a solitary Escape arrives, give a tiny 25ms window for following
-        // escape sequence bytes (handles network/SSH latency and slow terminals)
-        if (n == 1 && buf[0] == '\033')
+        // Bracketed Paste Mode: "\033[200~" ... "\033[201~"
+        if (in.starts_with("\033[200~"))
         {
-            struct pollfd pfd = {STDIN_FILENO, POLLIN, 0};
-            if (::poll(&pfd, 1, 25) > 0 && (pfd.revents & POLLIN))
+            size_t end_idx = in.find("\033[201~");
+            if (end_idx != std::string_view::npos)
             {
-                ssize_t extra = read(STDIN_FILENO, buf + 1, sizeof(buf) - 1);
-                if (extra > 0)
+                std::string_view raw = in.substr(6, end_idx - 6);
+                in.remove_prefix(end_idx + 6);
+
+                // Normalize CRLF and CR to LF
+                std::string text;
+                text.reserve(raw.size());
+                for (size_t i = 0; i < raw.size(); ++i)
                 {
-                    n += extra;
+                    if (raw[i] == '\r')
+                    {
+                        if (i + 1 < raw.size() && raw[i + 1] == '\n')
+                        {
+                            continue; // skip '\r' before '\n'
+                        }
+                        text.push_back('\n');
+                    }
+                    else
+                    {
+                        text.push_back(raw[i]);
+                    }
                 }
+                return PasteEvent{std::move(text)};
             }
-            if (n == 1)
-            {
-                return KeyEvent{static_cast<uint32_t>(Key::Escape)};
-            }
+            // Terminator hasn't arrived yet
+            return TickEvent{};
         }
 
-        if (n > 1 && buf[0] == '\033')
+        // Escape sequences starting with \033
+        if (in[0] == '\033')
         {
-            Event esc_ev = parse_escape(buf, n);
-            if (std::holds_alternative<KeyEvent>(esc_ev))
+            // Standalone Escape
+            if (in.size() == 1)
             {
-                return esc_ev;
+                in.remove_prefix(1);
+                return KeyEvent{static_cast<uint32_t>(Key::Escape)};
             }
+
+            // CSI sequence: "\033[" ... [0x40 - 0x7e]
+            if (in[1] == '[')
+            {
+                size_t i = 2;
+                while (i < in.size() &&
+                       (static_cast<unsigned char>(in[i]) < 0x40 ||
+                        static_cast<unsigned char>(in[i]) > 0x7e))
+                {
+                    i++;
+                }
+
+                if (i < in.size())
+                {
+                    size_t csi_len = i + 1;
+                    std::string_view csi_str = in.substr(0, csi_len);
+                    in.remove_prefix(csi_len);
+                    if (auto ke = parse_csi(csi_str.data(), csi_len))
+                    {
+                        return *ke;
+                    }
+                    return TickEvent{};
+                }
+                // Incomplete CSI sequence in buffer
+                return TickEvent{};
+            }
+
+            // SS3 sequence: "\033O" + char
+            if (in[1] == 'O')
+            {
+                if (in.size() >= 3)
+                {
+                    std::string_view ss3_str = in.substr(0, 3);
+                    in.remove_prefix(3);
+                    if (auto ke = parse_ss3(ss3_str.data(), 3))
+                    {
+                        return *ke;
+                    }
+                    return TickEvent{};
+                }
+                return TickEvent{};
+            }
+
+            // Alt + single-byte ASCII
+            if (static_cast<unsigned char>(in[1]) < 0x80)
+            {
+                char c = in[1];
+                in.remove_prefix(2);
+
+                if (c == '\r' || c == '\n') return KeyEvent{static_cast<uint32_t>(Key::Enter), false, false, true, false};
+                if (c == '\t')             return KeyEvent{static_cast<uint32_t>(Key::Tab), false, false, true, false};
+                if (c == 127 || c == 8)    return KeyEvent{static_cast<uint32_t>(Key::Backspace), false, false, true, false};
+                if (c == '\033')           return KeyEvent{static_cast<uint32_t>(Key::Escape), false, false, true, false};
+                if (c >= 'A' && c <= 'Z')
+                {
+                    return KeyEvent{static_cast<uint32_t>(c), false, true, true, false};
+                }
+                if (c >= 32)
+                {
+                    return KeyEvent{static_cast<uint32_t>(c), false, false, true, false};
+                }
+                return TickEvent{};
+            }
+
+            // Alt + multi-byte UTF-8
+            const char* ptr = in.data() + 1;
+            const char* end = in.data() + in.size();
+            char32_t cp = next_codepoint(ptr, end);
+            if (cp != 0)
+            {
+                size_t utf8_len = static_cast<size_t>(ptr - (in.data() + 1));
+                in.remove_prefix(1 + utf8_len);
+                return KeyEvent{static_cast<uint32_t>(cp), false, false, true, false};
+            }
+
+            in.remove_prefix(1);
             return TickEvent{};
         }
 
         // Tab
-        if (n == 1 && buf[0] == '\t')
+        if (in[0] == '\t')
         {
+            in.remove_prefix(1);
             return KeyEvent{static_cast<uint32_t>(Key::Tab)};
         }
 
-        // Enter
-        if (n == 1 && (buf[0] == '\r' || buf[0] == '\n'))
+        // Enter: \r\n, \r, \n
+        if (in[0] == '\r' || in[0] == '\n')
         {
+            if (in.size() >= 2 && in[0] == '\r' && in[1] == '\n')
+            {
+                in.remove_prefix(2);
+            }
+            else
+            {
+                in.remove_prefix(1);
+            }
             return KeyEvent{static_cast<uint32_t>(Key::Enter)};
         }
 
         // Backspace
-        if (n == 1 && (buf[0] == 127 || buf[0] == 8))
+        if (in[0] == 127 || in[0] == 8)
         {
+            in.remove_prefix(1);
             return KeyEvent{static_cast<uint32_t>(Key::Backspace)};
         }
 
         // Ctrl+Space
-        if (n == 1 && buf[0] == 0)
+        if (in[0] == 0)
         {
-            return KeyEvent{static_cast<uint32_t>(' '), true, false, false};
+            in.remove_prefix(1);
+            return KeyEvent{static_cast<uint32_t>(' '), true, false, false, false};
         }
 
-        // Ctrl+A through Ctrl+Z (1..26, excluding 9 (\t), 10 (\n), 13 (\r))
-        if (n == 1 && buf[0] >= 1 && buf[0] <= 26)
+        // Ctrl+A through Ctrl+Z (1..26)
+        if (static_cast<unsigned char>(in[0]) >= 1 && static_cast<unsigned char>(in[0]) <= 26)
         {
-            return KeyEvent{static_cast<uint32_t>('A' + buf[0] - 1), true, false, false};
+            char c = in[0];
+            in.remove_prefix(1);
+            return KeyEvent{static_cast<uint32_t>('A' + c - 1), true, false, false, false};
         }
 
-        // Regular printable ASCII character
-        if (n == 1 && buf[0] >= 32 && buf[0] < 127)
+        // Regular printable ASCII
+        if (static_cast<unsigned char>(in[0]) >= 32 && static_cast<unsigned char>(in[0]) < 127)
         {
-            bool shift = (buf[0] >= 'A' && buf[0] <= 'Z');
-            return KeyEvent{static_cast<uint32_t>(buf[0]), false, shift, false};
+            char c = in[0];
+            in.remove_prefix(1);
+            bool shift = (c >= 'A' && c <= 'Z');
+            return KeyEvent{static_cast<uint32_t>(c), false, shift, false, false};
         }
 
-        // Multi-byte UTF-8 character (typed Unicode)
-        if (n > 1 && buf[0] != '\033')
+        // Multi-byte UTF-8
+        const char* ptr = in.data();
+        const char* end = in.data() + in.size();
+        char32_t cp = next_codepoint(ptr, end);
+        if (cp != 0)
         {
-            const char* ptr = buf;
-            const char* end = buf + static_cast<size_t>(n);
-            char32_t cp = next_codepoint(ptr, end);
-            if (cp != 0)
+            size_t consumed = static_cast<size_t>(ptr - in.data());
+            in.remove_prefix(consumed);
+            return KeyEvent{static_cast<uint32_t>(cp)};
+        }
+
+        // Unparseable byte fallback: skip 1 byte
+        in.remove_prefix(1);
+        return TickEvent{};
+    }
+
+    auto EventLoop::parse(std::string_view bytes) -> Event
+    {
+        std::string_view sv = bytes;
+        return parse_event_internal(sv);
+    }
+
+    auto EventLoop::parse_stdin() -> Event
+    {
+        char buf[512] = {};
+        ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
+        if (n > 0)
+        {
+            m_pending_input.append(buf, static_cast<size_t>(n));
+        }
+
+        if (m_pending_input.empty())
+        {
+            return TickEvent{};
+        }
+
+        // If a solitary Escape arrives, wait up to 25ms to see if subsequent sequence bytes arrive
+        if (m_pending_input.size() == 1 && m_pending_input[0] == '\033')
+        {
+            struct pollfd pfd = {STDIN_FILENO, POLLIN, 0};
+            if (::poll(&pfd, 1, 25) > 0 && (pfd.revents & POLLIN))
             {
-                return KeyEvent{static_cast<uint32_t>(cp)};
+                char extra[256] = {};
+                ssize_t extra_n = read(STDIN_FILENO, extra, sizeof(extra));
+                if (extra_n > 0)
+                {
+                    m_pending_input.append(extra, static_cast<size_t>(extra_n));
+                }
             }
         }
 
-        return TickEvent{};
+        // If bracketed paste has begun but hasn't received terminator yet, read until \033[201~
+        if (m_pending_input.starts_with("\033[200~") && m_pending_input.find("\033[201~") == std::string::npos)
+        {
+            while (m_pending_input.find("\033[201~") == std::string::npos)
+            {
+                struct pollfd pfd = {STDIN_FILENO, POLLIN, 0};
+                if (::poll(&pfd, 1, 50) <= 0 || !(pfd.revents & POLLIN))
+                {
+                    break;
+                }
+                char chunk[512] = {};
+                ssize_t chunk_n = read(STDIN_FILENO, chunk, sizeof(chunk));
+                if (chunk_n <= 0) break;
+                m_pending_input.append(chunk, static_cast<size_t>(chunk_n));
+            }
+        }
+
+        std::string_view sv = m_pending_input;
+        Event ev = parse_event_internal(sv);
+        size_t consumed = m_pending_input.size() - sv.size();
+        if (consumed > 0)
+        {
+            m_pending_input.erase(0, consumed);
+        }
+        else
+        {
+            m_pending_input.erase(0, 1);
+        }
+        return ev;
     }
 
     auto EventLoop::poll(std::int32_t timeout_ms) -> Event
     {
+        // If there are still pending bytes in the buffer, parse immediately
+        if (!m_pending_input.empty())
+        {
+            return parse_stdin();
+        }
+
         struct pollfd pfds[2] =
         {
             {STDIN_FILENO,  POLLIN, 0},

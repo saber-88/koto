@@ -478,6 +478,127 @@ void test_tabs()
     std::cout << "PASSED\n";
 }
 
+void test_kitty_keyboard_and_paste()
+{
+    std::cout << "[Test 14] Kitty keyboard protocol (CSI u) & Bracketed paste mode... ";
+
+    // 1. Kitty CSI u Disambiguated Enter
+    {
+        Event ev1 = EventLoop::parse("\033[13u");
+        assert(ev1.is_key());
+        assert(ev1.key().is(Key::Enter));
+        assert(!ev1.key().ctrl && !ev1.key().shift && !ev1.key().alt && !ev1.key().meta);
+
+        Event ev2 = EventLoop::parse("\033[13;2u"); // Shift + Enter
+        assert(ev2.is_key());
+        assert(ev2.key().is(Key::Enter));
+        assert(ev2.key().shift);
+
+        Event ev3 = EventLoop::parse("\033[13;5u"); // Ctrl + Enter
+        assert(ev3.is_key());
+        assert(ev3.key().is(Key::Enter));
+        assert(ev3.key().ctrl);
+
+        Event ev4 = EventLoop::parse("\033[13;5:1u"); // Ctrl + Enter (press event)
+        assert(ev4.is_key());
+        assert(ev4.key().is(Key::Enter));
+        assert(ev4.key().ctrl);
+
+        Event ev5 = EventLoop::parse("\033[13;5:3u"); // Release event -> ignored
+        assert(ev5.is_tick());
+    }
+
+    // 2. Kitty CSI u Disambiguated Tab
+    {
+        Event ev1 = EventLoop::parse("\033[9u");
+        assert(ev1.is_key());
+        assert(ev1.key().is(Key::Tab));
+
+        Event ev2 = EventLoop::parse("\033[9;2u"); // Shift + Tab
+        assert(ev2.is_key());
+        assert(ev2.key().is(Key::Tab));
+        assert(ev2.key().is(Key::BackTab));
+        assert(ev2.key().shift);
+
+        Event ev3 = EventLoop::parse("\033[9;5u"); // Ctrl + Tab
+        assert(ev3.is_key());
+        assert(ev3.key().is(Key::Tab));
+        assert(ev3.key().ctrl);
+    }
+
+    // 3. Kitty CSI u Disambiguated Escape & Backspace
+    {
+        Event ev1 = EventLoop::parse("\033[27u");
+        assert(ev1.is_key());
+        assert(ev1.key().is(Key::Escape));
+
+        Event ev2 = EventLoop::parse("\033[27;3u"); // Alt + Escape
+        assert(ev2.is_key());
+        assert(ev2.key().is(Key::Escape));
+        assert(ev2.key().alt);
+
+        Event ev3 = EventLoop::parse("\033[127u");
+        assert(ev3.is_key());
+        assert(ev3.key().is(Key::Backspace));
+
+        Event ev4 = EventLoop::parse("\033[127;5u"); // Ctrl + Backspace
+        assert(ev4.is_key());
+        assert(ev4.key().is(Key::Backspace));
+        assert(ev4.key().ctrl);
+    }
+
+    // 4. Meta / Super modifier support (bitmask 8 / mod param 9)
+    {
+        Event ev1 = EventLoop::parse("\033[97;9u"); // Meta + 'a'
+        assert(ev1.is_key());
+        assert(ev1.key().ch == 'a');
+        assert(ev1.key().meta);
+        assert(!ev1.key().shift);
+
+        Event ev2 = EventLoop::parse("\033[97;10u"); // Meta + Shift + 'a' -> 'A'
+        assert(ev2.is_key());
+        assert(ev2.key().ch == 'A');
+        assert(ev2.key().meta);
+        assert(ev2.key().shift);
+
+        Event ev3 = EventLoop::parse("\033[1;9A"); // Meta + Up
+        assert(ev3.is_key());
+        assert(ev3.key().is(Key::Up));
+        assert(ev3.key().meta);
+    }
+
+    // 5. Kitty Functional Keys (Private Use Area)
+    {
+        Event ev1 = EventLoop::parse("\033[57414u"); // KP_ENTER
+        assert(ev1.is_key());
+        assert(ev1.key().is(Key::Enter));
+
+        Event ev2 = EventLoop::parse("\033[57419u"); // KP_UP
+        assert(ev2.is_key());
+        assert(ev2.key().is(Key::Up));
+
+        Event ev3 = EventLoop::parse("\033[57426u"); // KP_DELETE
+        assert(ev3.is_key());
+        assert(ev3.key().is(Key::Delete));
+
+        Event ev4 = EventLoop::parse("\033[57358u"); // CAPS_LOCK -> ignored
+        assert(ev4.is_tick());
+    }
+
+    // 6. Bracketed Paste Mode extraction & CRLF normalization
+    {
+        Event ev1 = EventLoop::parse("\033[200~Hello World\033[201~");
+        assert(ev1.is_paste());
+        assert(ev1.paste().text == "Hello World");
+
+        Event ev2 = EventLoop::parse("\033[200~Line 1\r\nLine 2\rLine 3\nLine 4\033[201~");
+        assert(ev2.is_paste());
+        assert(ev2.paste().text == "Line 1\nLine 2\nLine 3\nLine 4");
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -497,9 +618,10 @@ int main()
     test_grid_layout_and_fill();
     test_text_area();
     test_tabs();
+    test_kitty_keyboard_and_paste();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 13 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 14 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }
