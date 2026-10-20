@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -348,10 +349,10 @@ namespace koto
     std::string TextAreaState::to_string() const
     {
         std::string result;
-        for (size_t i = 0; i < text.size(); ++i)
+        for (auto [i, line] : std::views::enumerate(text))
         {
-            result.append(text[i]);
-            if (i + 1 < text.size())
+            result.append(line);
+            if (static_cast<size_t>(i) + 1 < text.size())
             {
                 result.push_back('\n');
             }

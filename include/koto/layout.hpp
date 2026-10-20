@@ -34,6 +34,8 @@ namespace koto
             return width > 0 && height > 0;
         }
 
+        bool operator==(const Area&) const = default;
+
         auto set_row(int r) const -> Area
         {
             Area copy = *this;
@@ -95,6 +97,7 @@ namespace koto
         }
 
         const Area& operator()(size_t r, size_t c) const { return at(r, c); }
+        const Area& operator[](size_t r, size_t c) const { return at(r, c); }
 
         struct RowProxy
         {

@@ -3,7 +3,7 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux-orange.svg?logo=linux)](https://kernel.org)
-[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-14%20Passing-brightgreen.svg)]()
+[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-15%20Passing-brightgreen.svg)]()
 [![CJK & Unicode](https://img.shields.io/badge/Unicode-7%20Passing-brightgreen.svg)]()
 [![Zero Warnings](https://img.shields.io/badge/Compiler%20Warnings-Zero-brightgreen.svg)]()
 
@@ -23,6 +23,7 @@ Traditional terminal UI development in C and C++ has long been burdened by low-l
 - **Universal Keyboard Engine & Kitty Protocol (`CSI u`)**: Automatically negotiates Kitty keyboard enhancement flag 1 (`\033[>1u` / `\033[<u`) to disambiguate `Tab` vs `Ctrl+I`, `Enter` vs `Ctrl+M`, `Escape`, modifier bitmasks (formula: `M = 1 + flags`, including Meta / Super / Windows keys), and functional keycodes across Kitty, Ghostty, Alacritty, WezTerm, Foot, GNOME Terminal, Konsole, xterm, tmux, and SSH.
 - **Bracketed Paste Mode (`\033[?2004h`)**: Captures clipboard streams inside dedicated `PasteEvent`s, protecting against runaway auto-indentation ("staircase effect"), frame render storms, and malicious terminal command injection.
 - **Deterministic State Architecture (`UI = f(state)`)**: Decouples business logic and navigation (`TextAreaState`, `ListState`, `TextInputState`, `TabsState`) from pure, immutable views (`TextArea`, `List`, `TextInput`, `Tabs`).
+- **Native C++23 Language Features**: Multidimensional 2D subscripting (`frame[r, c]`, `grid[r, c]`), exception-free `std::expected` error handling (`try_parse_color`), `std::views::enumerate` range pipelines, and defaulted comparison operators (`Area`).
 - **Headless Snapshot Testing by Default**: Create an in-memory `Frame(rows, cols)` without a live TTY or virtual framebuffer, draw any widget, and assert on exact row text with `frame.to_plain_text_row(r)`.
 - **Wide Unicode, CJK & Emoji Engine**: Full UAX-11 East Asian Width calculation, 2-column continuation cells, emoji rendering, and safe overwrite clipping.
 - **Zero Warnings**: Compiles cleanly with `-Wall -Werror -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast`.
@@ -467,7 +468,7 @@ void test_box_and_list()
 
 Run the built-in test suites:
 ```bash
-# 14 comprehensive snapshot tests (Box, List, Layout, Gauge, Sparkline, Grid, TextArea, Tabs, Kitty CSI u, Paste)
+# 15 comprehensive snapshot tests (Box, List, Layout, Gauge, Sparkline, Grid, TextArea, Tabs, Kitty CSI u, Paste, C++23 native features)
 ./build/test6_headless_test
 
 # 7 UTF-8 / CJK / Emoji width & continuation cell tests
@@ -488,7 +489,7 @@ The repository includes **12 standalone showcase programs** demonstrating every 
 | **`test3_vbox`** | Declarative flex and percentage layout composition (`VBox` / `HBox`). |
 | **`test4_text_input`** | 3-layer input customization: Pre-hook interceptors, validation filters, and modal Vim editing with `Tab` / `Shift+Tab` focus cycling. |
 | **`test5_yazi`** | A 3-column Miller column file explorer inspired by Yazi with live file previews via `TextArea`. |
-| **`test6_headless_test`** | Automated headless snapshot test suite with 14 tests and zero terminal dependencies. |
+| **`test6_headless_test`** | Automated headless snapshot test suite with 15 tests and zero terminal dependencies. |
 | **`test7_dashboard`** | Real-time 60 FPS system telemetry monitor demonstrating Gauge with fractional sub-blocks, rolling Sparklines, titled Rules, and Color lerping. |
 | **`test8_text_cjk_emoji`** | Comprehensive UTF-8 test suite asserting CJK ideographs, 2-column emojis, continuation cells, overwrite protection, and wide text alignment. |
 | **`test9_chess_board`** | Fully playable 8x8 interactive Chess board demonstrating `Layout::grid_uniform`, `Frame::fill`, alternating wood squares, and Unicode chess piece rendering. |

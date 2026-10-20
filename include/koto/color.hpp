@@ -1,12 +1,22 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
 #include <string_view>
 
 namespace koto
 {
 
     inline constexpr uint32_t COLOR_DEFAULT = 0xFF000000;
+
+    enum class ColorParseError
+    {
+        EmptyString,
+        InvalidLength,
+        InvalidHexDigit,
+    };
+
+    auto try_parse_color(std::string_view color) -> std::expected<uint32_t, ColorParseError>;
     auto parse_color(std::string_view color) -> uint32_t;
 
     struct Color
@@ -41,6 +51,7 @@ namespace koto
             return rgb(r, g, b);
         }
 
+        static auto try_from_hex(std::string_view hex) -> std::expected<uint32_t, ColorParseError>;
         static auto from_hex(std::string_view hex) -> uint32_t;
         static auto lerp(uint32_t c1, uint32_t c2, float t) noexcept -> uint32_t;
         static auto lerp(std::string_view hex1, std::string_view hex2, float t) -> uint32_t;

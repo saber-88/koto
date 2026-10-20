@@ -8,11 +8,11 @@
 
 namespace koto
 {
-    auto parse_color(std::string_view color) -> uint32_t
-    {   
+    auto try_parse_color(std::string_view color) -> std::expected<uint32_t, ColorParseError>
+    {
         if (color.empty())
         {
-            return COLOR_DEFAULT;
+            return std::unexpected(ColorParseError::EmptyString);
         }
 
         if (color[0] == '#')
@@ -20,11 +20,51 @@ namespace koto
             color.remove_prefix(1);
         }
 
-        char buf[8] = {};
-        size_t n = std::min(sizeof(buf) - 1,color.size());
-        color.copy(buf,n);
+        if (color.size() != 6 && color.size() != 3 && color.size() != 8)
+        {
+            return std::unexpected(ColorParseError::InvalidLength);
+        }
+
+        for (char c : color)
+        {
+            bool is_hex = (c >= '0' && c <= '9') ||
+                          (c >= 'a' && c <= 'f') ||
+                          (c >= 'A' && c <= 'F');
+            if (!is_hex)
+            {
+                return std::unexpected(ColorParseError::InvalidHexDigit);
+            }
+        }
+
+        // 3-digit shorthand hex: #RGB -> #RRGGBB
+        if (color.size() == 3)
+        {
+            auto hex_val = [](char c) -> uint32_t {
+                if (c >= '0' && c <= '9') return static_cast<uint32_t>(c - '0');
+                if (c >= 'a' && c <= 'f') return static_cast<uint32_t>(c - 'a' + 10);
+                return static_cast<uint32_t>(c - 'A' + 10);
+            };
+            uint32_t r = hex_val(color[0]);
+            uint32_t g = hex_val(color[1]);
+            uint32_t b = hex_val(color[2]);
+            return Color::rgb(static_cast<uint8_t>(r * 17), static_cast<uint8_t>(g * 17), static_cast<uint8_t>(b * 17));
+        }
+
+        char buf[9] = {};
+        size_t n = std::min(sizeof(buf) - 1, color.size());
+        color.copy(buf, n);
         buf[n] = '\0';
-        return static_cast<uint32_t>(std::strtoul(buf,nullptr,16));
+        return static_cast<uint32_t>(std::strtoul(buf, nullptr, 16));
+    }
+
+    auto parse_color(std::string_view color) -> uint32_t
+    {   
+        return try_parse_color(color).value_or(COLOR_DEFAULT);
+    }
+
+    auto Color::try_from_hex(std::string_view hex) -> std::expected<uint32_t, ColorParseError>
+    {
+        return try_parse_color(hex);
     }
 
     auto Color::from_hex(std::string_view hex) -> uint32_t

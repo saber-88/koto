@@ -39,6 +39,27 @@ namespace koto
         }
         return m_back_buffer[static_cast<size_t>(row * m_cols + col)];
     }
+
+    auto Frame::operator[](int row, int col) -> Cell&
+    {
+        if (row < 0 || row >= m_rows || col < 0 || col >= m_cols)
+        {
+            static thread_local Cell s_dummy{};
+            s_dummy = Cell{};
+            return s_dummy;
+        }
+        return m_back_buffer[static_cast<size_t>(row * m_cols + col)];
+    }
+
+    auto Frame::operator[](int row, int col) const -> const Cell&
+    {
+        if (row < 0 || row >= m_rows || col < 0 || col >= m_cols)
+        {
+            static const Cell s_empty{};
+            return s_empty;
+        }
+        return m_back_buffer[static_cast<size_t>(row * m_cols + col)];
+    }
     
     auto Frame::set_cell(int row, int col, Cell c) -> void
     {

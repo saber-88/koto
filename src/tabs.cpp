@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -304,8 +305,9 @@ namespace koto
             }
         };
 
-        for (size_t i = 0; i < titles.size(); ++i)
+        for (auto [i_idx, title] : std::views::enumerate(titles))
         {
+            size_t i = static_cast<size_t>(i_idx);
             if (cur_col >= inner.right())
             {
                 break;
@@ -322,20 +324,20 @@ namespace koto
                 if (is_active)
                 {
                     print_text("[ ", fg_color, bg_color);
-                    print_text(titles[i], fg_color, bg_color);
+                    print_text(title, fg_color, bg_color);
                     print_text(" ]", fg_color, bg_color);
                 }
                 else
                 {
                     print_text("  ", fg_color, bg_color);
-                    print_text(titles[i], fg_color, bg_color);
+                    print_text(title, fg_color, bg_color);
                     print_text("  ", fg_color, bg_color);
                 }
             }
             else // Bar & Underline styles
             {
                 print_text(" ", fg_color, bg_color);
-                print_text(titles[i], fg_color, bg_color);
+                print_text(title, fg_color, bg_color);
                 print_text(" ", fg_color, bg_color);
             }
 

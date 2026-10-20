@@ -20,6 +20,8 @@ namespace koto
             auto handle_resize(int rows, int cols) -> void;
             auto set_cell(int row, int col, Cell c) -> void;
             auto get_cell(int row, int col) const -> Cell;
+            auto operator[](int row, int col) -> Cell&;
+            auto operator[](int row, int col) const -> const Cell&;
             auto fill(Area area, Cell c) -> void;
             auto fill(Area area, char32_t ch, uint32_t fg = COLOR_DEFAULT, uint32_t bg = COLOR_DEFAULT) -> void;
             auto clear_back_buffer() -> void;

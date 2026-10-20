@@ -599,6 +599,65 @@ void test_kitty_keyboard_and_paste()
     std::cout << "PASSED\n";
 }
 
+void test_cpp23_modernizations()
+{
+    std::cout << "[Test 15] C++23 native features (operator[r, c], std::expected, std::views::enumerate)... ";
+
+    // 1. Frame::operator[r, c] 2D indexing & mutation
+    {
+        Frame frame(4, 10);
+        frame[1, 2] = Cell{U'★', Color::Yellow, Color::Black};
+        assert(frame.get_cell(1, 2).ch == U'★');
+        assert(frame[1, 2].ch == U'★');
+        assert(frame[1, 2].fg == Color::Yellow);
+
+        const Frame& cf = frame;
+        assert(cf[1, 2].ch == U'★');
+        assert(cf[0, 0].ch == U' '); // default empty cell
+    }
+
+    // 2. Grid::operator[r, c] 2D indexing
+    {
+        Area root(0, 0, 80, 24);
+        auto grid = Layout::grid_uniform(root, 3, 4);
+        Area cell_1_2 = grid[1, 2];
+        assert(cell_1_2 == grid.at(1, 2));
+        assert(cell_1_2 == grid(1, 2));
+        assert(cell_1_2 == grid[1][2]); // backward compatible proxy
+    }
+
+    // 3. std::expected Color parsing (try_parse_color)
+    {
+        auto ok_6 = try_parse_color("#FF5500");
+        assert(ok_6.has_value());
+        assert(*ok_6 == 0x00FF5500);
+
+        auto ok_3 = try_parse_color("#F00");
+        assert(ok_3.has_value());
+        assert(*ok_3 == Color::Red);
+
+        auto err_empty = try_parse_color("");
+        assert(!err_empty.has_value());
+        assert(err_empty.error() == ColorParseError::EmptyString);
+
+        auto err_len = try_parse_color("#1234");
+        assert(!err_len.has_value());
+        assert(err_len.error() == ColorParseError::InvalidLength);
+
+        auto err_char = try_parse_color("#ZZZZZZ");
+        assert(!err_char.has_value());
+        assert(err_char.error() == ColorParseError::InvalidHexDigit);
+    }
+
+    // 4. TextAreaState::to_string with std::views::enumerate
+    {
+        TextAreaState ta("alpha\nbeta\ngamma");
+        assert(ta.to_string() == "alpha\nbeta\ngamma");
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -619,9 +678,10 @@ int main()
     test_text_area();
     test_tabs();
     test_kitty_keyboard_and_paste();
+    test_cpp23_modernizations();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 14 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 15 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }
