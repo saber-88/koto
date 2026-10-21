@@ -557,13 +557,6 @@ namespace koto
 
     auto EventLoop::parse_stdin() -> Event
     {
-        char buf[512] = {};
-        ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
-        if (n > 0)
-        {
-            m_pending_input.append(buf, static_cast<size_t>(n));
-        }
-
         if (m_pending_input.empty())
         {
             return TickEvent{};
@@ -617,12 +610,14 @@ namespace koto
 
     auto EventLoop::poll(std::int32_t timeout_ms) -> Event
     {
-        // If there are still pending bytes in the buffer, parse immediately
+        // 1. If there are pending unconsumed bytes from a previous read (e.g. mouse release or rapid typing),
+        // parse and return immediately WITHOUT blocking on read() or polling!
         if (!m_pending_input.empty())
         {
             return parse_stdin();
         }
 
+        // 2. Wait for stdin or SIGWINCH resize signal
         struct pollfd pfds[2] =
         {
             {STDIN_FILENO,  POLLIN, 0},
@@ -647,7 +642,30 @@ namespace koto
 
         if (pfds[0].revents & POLLIN)
         {
-            // key
+            // Drain all available bytes currently in OS kernel stdin buffer
+            int available = 0;
+            if (ioctl(STDIN_FILENO, FIONREAD, &available) == 0 && available > 0)
+            {
+                char buf[1024];
+                while (available > 0)
+                {
+                    size_t to_read = std::min(sizeof(buf), static_cast<size_t>(available));
+                    ssize_t n = read(STDIN_FILENO, buf, to_read);
+                    if (n <= 0) break;
+                    m_pending_input.append(buf, static_cast<size_t>(n));
+                    available -= static_cast<int>(n);
+                }
+            }
+            else
+            {
+                char buf[512] = {};
+                ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));
+                if (n > 0)
+                {
+                    m_pending_input.append(buf, static_cast<size_t>(n));
+                }
+            }
+
             return parse_stdin();
         }
 

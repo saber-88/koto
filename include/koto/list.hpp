@@ -26,9 +26,12 @@ namespace koto
         std::vector<std::string> items;
         int selected = 0;
         int scroll = 0;
-        bool focused = false;
+        bool focused = true;
         ListNavigation navigation = ListNavigation::Clamp;
         std::function<void(int, const std::string&)> on_change = nullptr;
+
+        Area rendered_area{0, 0, 0, 0};
+        Area rendered_inner{0, 0, 0, 0};
 
         ListState() = default;
         ListState(std::vector<std::string> initial_items, ListNavigation nav = ListNavigation::Clamp);
@@ -40,6 +43,7 @@ namespace koto
         auto set_selected(int index) -> void;
 
         auto handle_event(const KeyEvent& key) -> bool;
+        auto handle_mouse(const MouseEvent& mouse) -> bool;
         auto set_items(std::vector<std::string> new_items) -> void;
         auto selected_item() const -> std::optional<std::string_view>;
         auto selected_item_ptr() const -> const std::string*;
@@ -67,6 +71,10 @@ namespace koto
             List& title_bg(uint32_t color);
             List& title_align(TitleAlign align);
             List& overflow(TextOverflow o);
+            List& focused(bool is_focused);
+            List& focused_border_fg(std::string_view color);
+            List& focused_border_fg(uint32_t color);
+            List& id(Id tag_id);
             void draw(Frame &frame, Area area) override;
             explicit List(ListState& state) : m_state(state) {}
 
@@ -83,6 +91,10 @@ namespace koto
             uint32_t m_title_bg = COLOR_DEFAULT;
             TitleAlign m_title_align = TitleAlign::Left;
             TextOverflow m_overflow = TextOverflow::Ellipsis;
+            bool m_focused = false;
+            bool m_has_focused_override = false;
+            uint32_t m_focused_border_fg = Color::Cyan;
+            Id m_id = Id::none();
             
             void normalize_state();
     };

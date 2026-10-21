@@ -92,12 +92,17 @@ namespace koto
 
     bool TabsState::handle_event(const KeyEvent& key)
     {
-        if (key.is(Key::Tab) || key.is(Key::Right))
+        if (!this->focused || this->titles.empty())
+        {
+            return false;
+        }
+
+        if (key.is(Key::Right) || key.ch == 'l')
         {
             this->select_next();
             return true;
         }
-        if (key.is(Key::BackTab) || key.is(Key::Left))
+        if (key.is(Key::Left) || key.ch == 'h')
         {
             this->select_prev();
             return true;
@@ -124,6 +129,37 @@ namespace koto
             }
         }
 
+        return false;
+    }
+
+    bool TabsState::handle_mouse(const MouseEvent& mouse)
+    {
+        if (this->titles.empty()) return false;
+
+        if (mouse.button == MouseButton::WheelUp)
+        {
+            this->select_prev();
+            return true;
+        }
+        if (mouse.button == MouseButton::WheelDown)
+        {
+            this->select_next();
+            return true;
+        }
+
+        if (mouse.action == MouseAction::Press && mouse.button == MouseButton::Left)
+        {
+            for (size_t i = 0; i < this->rendered_tabs.size(); ++i)
+            {
+                const auto& r = this->rendered_tabs[i];
+                if (mouse.row >= r.start_row && mouse.row < r.end_row &&
+                    mouse.col >= r.start_col && mouse.col < r.end_col)
+                {
+                    this->set_selected(i);
+                    return true;
+                }
+            }
+        }
         return false;
     }
 
@@ -257,11 +293,43 @@ namespace koto
         return *this;
     }
 
+    Tabs& Tabs::focused(bool is_focused)
+    {
+        m_focused = is_focused;
+        m_has_focused_override = true;
+        return *this;
+    }
+
+    Tabs& Tabs::focused_border_fg(std::string_view color)
+    {
+        m_focused_border_fg = parse_color(color);
+        return *this;
+    }
+
+    Tabs& Tabs::focused_border_fg(uint32_t color)
+    {
+        m_focused_border_fg = color;
+        return *this;
+    }
+
+    Tabs& Tabs::id(Id tag_id)
+    {
+        m_id = tag_id;
+        return *this;
+    }
+
     void Tabs::draw(Frame& frame, Area area)
     {
         if (!area.is_valid() || area.width <= 0 || area.height <= 0)
         {
             return;
+        }
+
+        bool is_foc = m_has_focused_override ? m_focused : (m_state ? m_state->focused : false);
+        Id effective_id = !m_id.is_none() ? m_id : (m_state ? Id(m_state) : Id::none());
+        if (!effective_id.is_none())
+        {
+            frame.tag_area(area, effective_id);
         }
 
         Area inner = area;
@@ -271,6 +339,9 @@ namespace koto
                 .border_style(m_border_style)
                 .title(m_box_title)
                 .title_align(m_title_align)
+                .focused(is_foc)
+                .focused_border_fg(m_focused_border_fg)
+                .id(effective_id)
                 .draw(frame, area);
             inner = area.inset(1, 1, 1, 1);
         }
@@ -284,6 +355,11 @@ namespace koto
         if (titles.empty())
         {
             return;
+        }
+
+        if (m_state)
+        {
+            m_state->rendered_tabs.clear();
         }
 
         size_t active_idx = m_state ? m_state->selected : m_selected;
@@ -350,6 +426,16 @@ namespace koto
             }
 
             int tab_end_x = cur_col;
+
+            if (m_state)
+            {
+                m_state->rendered_tabs.push_back(TabRect{
+                    .start_col = tab_start_x,
+                    .end_col = tab_end_x,
+                    .start_row = inner.row,
+                    .end_row = inner.bottom()
+                });
+            }
 
             if (is_active)
             {

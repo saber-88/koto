@@ -352,6 +352,11 @@ namespace koto
 
     bool TextAreaState::handle_event(const KeyEvent& key)
     {
+        if (!this->focused)
+        {
+            return false;
+        }
+
         if (key.is(Key::Up))
         {
             this->move_up();
@@ -408,6 +413,21 @@ namespace koto
             return true;
         }
 
+        return false;
+    }
+
+    bool TextAreaState::handle_mouse(const MouseEvent& mouse)
+    {
+        if (mouse.button == MouseButton::WheelUp)
+        {
+            this->move_up();
+            return true;
+        }
+        if (mouse.button == MouseButton::WheelDown)
+        {
+            this->move_down();
+            return true;
+        }
         return false;
     }
 
@@ -482,6 +502,7 @@ namespace koto
     TextArea& TextArea::focused(bool f)
     {
         m_focused = f;
+        m_has_focused_override = true;
         return *this;
     }
 
@@ -498,6 +519,24 @@ namespace koto
         return *this;
     }
 
+    TextArea& TextArea::focused_border_fg(std::string_view fg)
+    {
+        m_focused_border_fg = parse_color(fg);
+        return *this;
+    }
+
+    TextArea& TextArea::focused_border_fg(uint32_t fg)
+    {
+        m_focused_border_fg = fg;
+        return *this;
+    }
+
+    TextArea& TextArea::id(Id tag_id)
+    {
+        m_id = tag_id;
+        return *this;
+    }
+
     void TextArea::draw(Frame& frame, Area area)
     {
         if (!area.is_valid())
@@ -505,17 +544,24 @@ namespace koto
             return;
         }
 
+        bool is_foc = m_has_focused_override ? m_focused : m_state.focused;
+        Id effective_id = m_id.is_none() ? Id(&m_state) : m_id;
+        frame.tag_area(area, effective_id);
+
         Area inner = area;
 
         if (m_border_style != BorderStyle::None)
         {
-            uint32_t border_col = m_focused ? Color::Cyan : m_fg;
+            uint32_t border_col = is_foc ? m_focused_border_fg : m_fg;
             Box()
                 .border_style(m_border_style)
                 .title(m_title)
                 .title_align(m_title_align)
                 .fg(border_col)
                 .bg(m_bg)
+                .focused(is_foc)
+                .focused_border_fg(m_focused_border_fg)
+                .id(effective_id)
                 .title_fg(border_col)
                 .filled(true)
                 .draw(frame, area);
@@ -671,7 +717,7 @@ namespace koto
         }
 
         // Set hardware cursor if focused
-        if (m_focused)
+        if (is_foc)
         {
             int cursor_rel_row = static_cast<int>(m_state.cursor_row) - static_cast<int>(m_state.scroll_row);
             int cursor_rel_col = cursor_visual_col - static_cast<int>(m_state.scroll_col);

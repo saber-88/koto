@@ -329,6 +329,19 @@ namespace koto
         return *this;
     }
 
+    TextInput& TextInput::focused(bool is_focused)
+    {
+        m_focused = is_focused;
+        m_has_focused_override = true;
+        return *this;
+    }
+
+    TextInput& TextInput::id(Id tag_id)
+    {
+        m_id = tag_id;
+        return *this;
+    }
+
     void TextInput::draw(Frame& frame, Area area)
     {
         if (!area.is_valid())
@@ -336,16 +349,23 @@ namespace koto
             return;
         }
 
+        bool is_foc = m_has_focused_override ? m_focused : m_state.focused;
+        Id effective_id = m_id.is_none() ? Id(&m_state) : m_id;
+        frame.tag_area(area, effective_id);
+
         Area inner = area;
 
         // Draw border or clear inner area
         if (m_border_style != BorderStyle::None)
         {
-            uint32_t border_color = m_state.focused ? m_focused_border_fg : m_fg;
+            uint32_t border_color = is_foc ? m_focused_border_fg : m_fg;
             Box()
                 .border_style(m_border_style)
                 .fg(border_color)
                 .bg(m_bg)
+                .focused(is_foc)
+                .focused_border_fg(m_focused_border_fg)
+                .id(effective_id)
                 .title(m_title)
                 .title_fg(border_color)
                 .filled(true)

@@ -107,9 +107,9 @@ namespace koto
             {
                 m_mouse_handler(*mouse);
             }
-            if (m_focus_manager && mouse->action == MouseAction::Press && mouse->button == MouseButton::Left)
+            if (m_focus_manager)
             {
-                if (m_focus_manager->handle_mouse_click(mouse->row, mouse->col, m_frame))
+                if (m_focus_manager->handle_mouse(*mouse, m_frame))
                 {
                     m_needs_draw = true;
                 }
@@ -177,7 +177,8 @@ namespace koto
                 this->draw_frame();
             }
 
-            Event ev = m_loop.poll(16);
+            int32_t wait_ms = m_loop.has_pending() ? 0 : 16;
+            Event ev = m_loop.poll(wait_ms);
             if (!ev.is_tick())
             {
                 this->dispatch_event(ev);

@@ -149,17 +149,16 @@ namespace koto
 
     auto Layout::center(Area area, int width, int height) -> Area
     {
-        if(!area.is_valid())
+        if (!area.is_valid() || width <= 0 || height <= 0)
         {
-            return {area.row,area.col,0,0};
+            return {area.row, area.col, 0, 0};
         }
-        int r = area.row + ( area.height - height) / 2;
-        int c = area.col + (area.width - width) / 2;
+        int w = std::min(width, area.width);
+        int h = std::min(height, area.height);
+        int r = area.row + (area.height - h) / 2;
+        int c = area.col + (area.width - w) / 2;
 
-        r = (r < 0) ? 0 : r;
-        c = (c < 0) ? 0 : c;
-
-        return {r,c,width,height};
+        return {r, c, w, h};
     }
 
     auto Layout::grid(Area area, 

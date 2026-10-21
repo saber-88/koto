@@ -126,7 +126,7 @@ namespace koto
 
     auto ListState::handle_event(const KeyEvent& key) -> bool
     {
-        if (this->items.empty()) return false;
+        if (!this->focused || this->items.empty()) return false;
 
         if (key.ch == 'j' || key.is(Key::Down))
         {
@@ -149,6 +149,37 @@ namespace koto
             return true;
         }
 
+        return false;
+    }
+
+    auto ListState::handle_mouse(const MouseEvent& mouse) -> bool
+    {
+        if (this->items.empty()) return false;
+
+        if (mouse.button == MouseButton::WheelUp)
+        {
+            this->select_prev();
+            return true;
+        }
+        if (mouse.button == MouseButton::WheelDown)
+        {
+            this->select_next();
+            return true;
+        }
+
+        if (mouse.action == MouseAction::Press && mouse.button == MouseButton::Left)
+        {
+            if (this->rendered_inner.contains(mouse.row, mouse.col))
+            {
+                int row_offset = mouse.row - this->rendered_inner.row;
+                int target_idx = this->scroll + row_offset;
+                if (target_idx >= 0 && target_idx < static_cast<int>(this->items.size()))
+                {
+                    this->set_selected(target_idx);
+                    return true;
+                }
+            }
+        }
         return false;
     }
 
@@ -256,6 +287,31 @@ namespace koto
         return *this;
     }
 
+    List& List::focused(bool is_focused)
+    {
+        m_focused = is_focused;
+        m_has_focused_override = true;
+        return *this;
+    }
+
+    List& List::focused_border_fg(std::string_view color)
+    {
+        m_focused_border_fg = parse_color(color);
+        return *this;
+    }
+
+    List& List::focused_border_fg(uint32_t color)
+    {
+        m_focused_border_fg = color;
+        return *this;
+    }
+
+    List& List::id(Id tag_id)
+    {
+        m_id = tag_id;
+        return *this;
+    }
+
     void List::normalize_state()
     {
         if (m_state.items.empty())
@@ -295,10 +351,17 @@ namespace koto
             return;
         }
 
+        bool is_foc = m_has_focused_override ? m_focused : m_state.focused;
+        Id effective_id = m_id.is_none() ? Id(&m_state) : m_id;
+        frame.tag_area(area, effective_id);
+
         Box()
             .border_style(m_border_style)
             .bg(m_bg)
             .fg(m_fg)
+            .focused(is_foc)
+            .focused_border_fg(m_focused_border_fg)
+            .id(effective_id)
             .filled(true)
             .title(m_title)
             .title_fg(m_title_fg)
@@ -307,6 +370,8 @@ namespace koto
             .draw(frame, area);
 
         Area inner = (m_border_style == BorderStyle::None) ? area : area.inset(1, 1, 1, 1);
+        m_state.rendered_area = area;
+        m_state.rendered_inner = inner;
         
         if (!inner.is_valid() || m_state.items.empty())
         {

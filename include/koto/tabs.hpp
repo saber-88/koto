@@ -23,12 +23,22 @@ namespace koto
         Underline   // Top line tabs, bottom line underline bar
     };
 
+    struct TabRect
+    {
+        int start_col = 0;
+        int end_col = 0;
+        int start_row = 0;
+        int end_row = 0;
+    };
+
     struct TabsState
     {
         std::vector<std::string> titles;
         size_t selected = 0;
-        bool focused = false;
+        bool focused = true;
         std::function<void(size_t, const std::string&)> on_change = nullptr;
+
+        std::vector<TabRect> rendered_tabs;
 
         TabsState() = default;
         TabsState(std::vector<std::string> initial_titles, size_t initial_selected = 0);
@@ -39,6 +49,7 @@ namespace koto
         void select_last();
         void set_selected(size_t index);
         bool handle_event(const KeyEvent& key);
+        bool handle_mouse(const MouseEvent& mouse);
         std::optional<std::string_view> selected_title() const;
         const std::string* selected_title_ptr() const;
     };
@@ -69,6 +80,10 @@ namespace koto
         Tabs& border_style(BorderStyle border);
         Tabs& title(std::string_view title);
         Tabs& title_align(TitleAlign align);
+        Tabs& focused(bool is_focused);
+        Tabs& focused_border_fg(std::string_view color);
+        Tabs& focused_border_fg(uint32_t color);
+        Tabs& id(Id tag_id);
 
         void draw(Frame& frame, Area area) override;
 
@@ -86,5 +101,9 @@ namespace koto
         BorderStyle m_border_style = BorderStyle::None;
         std::string m_box_title;
         TitleAlign m_title_align = TitleAlign::Left;
+        bool m_focused = false;
+        bool m_has_focused_override = false;
+        uint32_t m_focused_border_fg = Color::Cyan;
+        Id m_id = Id::none();
     };
 }

@@ -4,6 +4,7 @@
 #include "koto/terminal.hpp"
 #include "koto/utf8.hpp"
 #include <algorithm>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -276,7 +277,19 @@ namespace koto
         // flush entire frame in one write if attached to a terminal and flush requested
         if (flush && m_term != nullptr && !m_output.empty())
         {
-            write(STDOUT_FILENO, m_output.data(), m_output.size());
+            const char* ptr = m_output.data();
+            size_t rem = m_output.size();
+            while (rem > 0)
+            {
+                ssize_t written = write(STDOUT_FILENO, ptr, rem);
+                if (written < 0)
+                {
+                    if (errno == EINTR) continue;
+                    break;
+                }
+                ptr += written;
+                rem -= static_cast<size_t>(written);
+            }
             fflush(stdout);
         }
     }

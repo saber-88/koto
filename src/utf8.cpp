@@ -18,6 +18,11 @@ namespace koto
             in.remove_prefix(1);
             return byte;
         }
+        else if (byte < 0xC0 || byte >= 0xF8)
+        {
+            in.remove_prefix(1);
+            return U'\uFFFD';
+        }
         else if (byte < 0xE0)
         {
             if (in.size() < 2) { in = {}; return U'\uFFFD'; }

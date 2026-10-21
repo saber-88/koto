@@ -141,6 +141,7 @@ namespace koto
             EventLoop& operator=(const EventLoop&) = delete;
 
             auto poll(std::int32_t ms = 16) -> Event;
+            bool has_pending() const noexcept { return !m_pending_input.empty(); }
 
             // Direct buffer parser (useful for testing or feeding synthetic input streams)
             static auto parse(std::string_view bytes) -> Event;

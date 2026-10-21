@@ -842,15 +842,18 @@ void test_universal_id_and_focus_manager()
         TextInputState user_in("Alice");
         TextInputState pass_in("");
         ListState files({"doc.txt", "main.cpp"});
+        TextAreaState editor("code");
 
         fm.add(user_in);
         fm.add(pass_in);
         fm.add(files);
+        fm.add(editor);
 
         // First registered element gains initial focus automatically
         assert(user_in.focused == true);
         assert(pass_in.focused == false);
         assert(files.focused == false);
+        assert(editor.focused == false);
         assert(fm.is_focused(user_in));
         assert(!fm.is_focused(pass_in));
 
@@ -860,6 +863,7 @@ void test_universal_id_and_focus_manager()
         assert(user_in.focused == false);
         assert(pass_in.focused == true);
         assert(files.focused == false);
+        assert(editor.focused == false);
         assert(fm.is_focused(pass_in));
 
         // Tab -> cycle to next (files)
@@ -867,7 +871,21 @@ void test_universal_id_and_focus_manager()
         assert(user_in.focused == false);
         assert(pass_in.focused == false);
         assert(files.focused == true);
+        assert(editor.focused == false);
         assert(fm.is_focused(files));
+
+        // Tab -> cycle to next (editor)
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Tab)});
+        assert(user_in.focused == false);
+        assert(pass_in.focused == false);
+        assert(files.focused == false);
+        assert(editor.focused == true);
+        assert(fm.is_focused(editor));
+
+        // BackTab -> cycle backwards (files)
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::BackTab)});
+        assert(files.focused == true);
+        assert(editor.focused == false);
 
         // BackTab -> cycle backwards (pass_in)
         fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::BackTab)});
@@ -967,6 +985,7 @@ void test_spatial_navigation_and_modal_isolation()
     {
         Frame frame(15, 30);
         FocusManager fm;
+        fm.enable_spatial_arrows(true);
 
         // Register 9 cells (pure logical IDs, zero coordinates passed!)
         for (size_t r = 0; r < 3; ++r)
@@ -1024,7 +1043,8 @@ void test_spatial_navigation_and_modal_isolation()
         Frame frame(20, 40);
         FocusManager fm;
 
-        // Background UI: 2 panels
+        // Background UI: 2 panels with spatial arrow navigation enabled
+        fm.enable_spatial_arrows(true);
         fm.add("sidebar");
         fm.add("main_editor");
 
@@ -1204,6 +1224,513 @@ void test_app_use_focus_and_mouse()
     std::cout << "PASSED\n";
 }
 
+void test_audit_fixes_and_edge_cases()
+{
+    std::cout << "[Test 21] Full audit fixes (List/Tabs focus defaults, auto-tagging, Layout::center clamping, UTF-8 safety)... ";
+
+    // 1. ListState focus defaults and event guarding
+    {
+        ListState ls({"Item 1", "Item 2"});
+        assert(ls.focused == true); // Default must be true for standalone usage
+
+        // Disabling focus prevents event handling
+        ls.focused = false;
+        bool consumed_unfocused = ls.handle_event(KeyEvent{'j'});
+        assert(!consumed_unfocused);
+        assert(ls.selected == 0);
+
+        // Re-enabling focus restores event handling
+        ls.focused = true;
+        bool consumed_focused = ls.handle_event(KeyEvent{'j'});
+        assert(consumed_focused);
+        assert(ls.selected == 1);
+    }
+
+    // 2. TabsState focus defaults and event guarding
+    {
+        TabsState ts({"Tab 1", "Tab 2"});
+        assert(ts.focused == true); // Default must be true for standalone usage
+
+        ts.focused = false;
+        bool consumed_unfocused = ts.handle_event(KeyEvent{static_cast<uint32_t>(Key::Right)});
+        assert(!consumed_unfocused);
+        assert(ts.selected == 0);
+
+        ts.focused = true;
+        bool consumed_focused = ts.handle_event(KeyEvent{static_cast<uint32_t>(Key::Right)});
+        assert(consumed_focused);
+        assert(ts.selected == 1);
+    }
+
+    // 3. Automatic Area Tagging into Frame Hit-Buffer
+    {
+        Frame frame(20, 40);
+
+        ListState ls({"Alpha", "Beta"});
+        TextInputState tis("Hello");
+        TextAreaState tas("Code\nHere");
+        TabsState ts({"One", "Two"});
+
+        Area a_list(0, 0, 10, 5);
+        Area a_input(5, 0, 20, 3);
+        Area a_area(8, 0, 20, 6);
+        Area a_tabs(14, 0, 20, 3);
+
+        List(ls).border_style(BorderStyle::Single).draw(frame, a_list);
+        TextInput(tis).border_style(BorderStyle::Single).draw(frame, a_input);
+        TextArea(tas).border_style(BorderStyle::Single).draw(frame, a_area);
+        Tabs(ts).border_style(BorderStyle::Single).draw(frame, a_tabs);
+
+        // Check that hit-testing queries on all 4 widgets return their respective state IDs!
+        assert(frame.hit_at(1, 2) == Id(&ls));
+        assert(frame.hit_at(6, 5) == Id(&tis));
+        assert(frame.hit_at(10, 5) == Id(&tas));
+        assert(frame.hit_at(15, 5) == Id(&ts));
+
+        // Spatial bounds auto-harvested by FocusManager
+        FocusManager fm;
+        fm.add(ls).add(tis).add(tas).add(ts);
+        fm.sync_geometry(frame);
+
+        auto bounds_ls = frame.bounds_of(Id(&ls));
+        assert(bounds_ls.has_value() && *bounds_ls == a_list);
+
+        auto bounds_input = frame.bounds_of(Id(&tis));
+        assert(bounds_input.has_value() && *bounds_input == a_input);
+
+        auto bounds_area = frame.bounds_of(Id(&tas));
+        assert(bounds_area.has_value() && *bounds_area == a_area);
+
+        auto bounds_tabs = frame.bounds_of(Id(&ts));
+        assert(bounds_tabs.has_value() && *bounds_tabs == a_tabs);
+    }
+
+    // 4. Visual Focus Glowing Border on List and Tabs
+    {
+        Frame frame(6, 20);
+        ListState ls({"Item 1"});
+        ls.focused = true;
+
+        List(ls)
+            .border_style(BorderStyle::Single)
+            .draw(frame, Area(0, 0, 10, 3));
+
+        // Border top-left corner must have glowing Cyan color
+        Cell corner = frame.get_cell(0, 0);
+        assert(corner.ch == U'┌');
+        assert(corner.fg == Color::Cyan);
+
+        TabsState ts({"T1", "T2"});
+        ts.focused = true;
+        Tabs(ts)
+            .border_style(BorderStyle::Single)
+            .focused_border_fg(Color::Yellow)
+            .draw(frame, Area(3, 0, 10, 3));
+
+        Cell tab_corner = frame.get_cell(3, 0);
+        assert(tab_corner.ch == U'┌');
+        assert(tab_corner.fg == Color::Yellow);
+    }
+
+    // 5. Layout::center Clamping Bug Fix
+    {
+        Area parent(5, 10, 40, 20);
+
+        // Under-sized: centers nicely
+        Area c_normal = Layout::center(parent, 20, 10);
+        assert(c_normal.row == 5 + (20 - 10) / 2);
+        assert(c_normal.col == 10 + (40 - 20) / 2);
+        assert(c_normal.width == 20);
+        assert(c_normal.height == 10);
+
+        // Over-sized: width 60 > 40, height 30 > 20 -> must clamp to parent bounds!
+        Area c_oversized = Layout::center(parent, 60, 30);
+        assert(c_oversized.row == 5);
+        assert(c_oversized.col == 10);
+        assert(c_oversized.width == 40);
+        assert(c_oversized.height == 20);
+    }
+
+    // 6. UTF-8 Decoder Resilience against Orphan Continuation Bytes
+    {
+        std::string_view bad_stream = "\x80\xFFHello";
+        char32_t c1 = next_codepoint(bad_stream);
+        assert(c1 == U'\uFFFD'); // 0x80 handled safely
+        char32_t c2 = next_codepoint(bad_stream);
+        assert(c2 == U'\uFFFD'); // 0xFF handled safely
+        char32_t c3 = next_codepoint(bad_stream);
+        assert(c3 == U'H');      // valid stream continues undamaged
+    }
+
+    // 7. FocusNavPolicy::TabOnly prevents unconsumed arrow keys from hijacking focus
+    {
+        FocusManager fm; // Default is TabOnly
+        assert(fm.navigation_policy() == FocusNavPolicy::TabOnly);
+
+        fm.add("btn1");
+        fm.add("btn2");
+
+        Frame frame(10, 30);
+        Box().id("btn1").draw(frame, Area(0, 0, 10, 3));
+        Box().id("btn2").draw(frame, Area(0, 12, 10, 3));
+        fm.sync_geometry(frame);
+
+        assert(fm.is_focused("btn1"));
+
+        // In TabOnly mode, pressing Right arrow does NOT jump focus!
+        bool moved_arrow = fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Right)});
+        assert(!moved_arrow);
+        assert(fm.is_focused("btn1")); // Still on btn1!
+
+        // Tab DOES jump focus predictably
+        bool moved_tab = fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Tab)});
+        assert(moved_tab);
+        assert(fm.is_focused("btn2"));
+
+        // Switching policy to SpatialArrows enables arrow key jumping
+        fm.enable_spatial_arrows(true);
+        assert(fm.navigation_policy() == FocusNavPolicy::SpatialArrows);
+        bool moved_spatial_left = fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Left)});
+        assert(moved_spatial_left);
+        assert(fm.is_focused("btn1"));
+    }
+
+    // 8. FocusManager::interceptor allows developers to write custom focus logic
+    {
+        FocusManager fm;
+        fm.add("panel1").add("panel2");
+        assert(fm.is_focused("panel1"));
+
+        // Intercept 'J' to jump focus forward
+        fm.interceptor([&](FocusManager& mgr, const KeyEvent& k) {
+            if (k.ch == 'J') {
+                mgr.next();
+                return true; // Consumed!
+            }
+            return false;
+        });
+
+        bool consumed = fm.handle_key(KeyEvent{'J'});
+        assert(consumed);
+        assert(fm.is_focused("panel2"));
+    }
+
+    // 9. FocusManager::can_focus vetoes focus switch (form validation)
+    {
+        FocusManager fm;
+        fm.add("input_email").add("input_pass");
+        assert(fm.is_focused("input_email"));
+
+        bool allow_leave = false;
+        fm.can_focus([&](FocusManager&, Id from_id, Id to_id) {
+            static_cast<void>(to_id);
+            if (from_id == Id("input_email") && !allow_leave) {
+                return false; // VETO! Field is invalid!
+            }
+            return true;
+        });
+
+        // Attempting to tab away is vetoed!
+        bool tabbed = fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Tab)});
+        assert(!tabbed);
+        assert(fm.is_focused("input_email")); // Retains focus!
+
+        // When validation passes, focus switch succeeds
+        allow_leave = true;
+        bool tabbed_ok = fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Tab)});
+        assert(tabbed_ok);
+        assert(fm.is_focused("input_pass"));
+    }
+
+    // 10. FocusManager::on_focus_change observer notification
+    {
+        FocusManager fm;
+        fm.add("tab_a").add("tab_b");
+
+        Id recorded_from = Id::none();
+        Id recorded_to   = Id::none();
+        fm.on_focus_change([&](Id from, Id to) {
+            recorded_from = from;
+            recorded_to = to;
+        });
+
+        fm.next();
+        assert(recorded_from == Id("tab_a"));
+        assert(recorded_to == Id("tab_b"));
+    }
+
+    std::cout << "PASSED\n";
+}
+
+void test_subitem_mouse_interaction()
+{
+    std::cout << "[Test 22] Sub-item mouse click & wheel interactions (List, Tabs, FocusManager)... ";
+
+    // 1. TabsState direct mouse click & wheel
+    {
+        Frame frame(3, 40);
+        TabsState tabs({"First", "Second", "Third"}, 0);
+        Tabs(tabs).draw(frame, frame.area());
+
+        // Check tabs were rendered
+        assert(tabs.rendered_tabs.size() == 3);
+
+        // Click on "Second" tab
+        const auto& second_tab = tabs.rendered_tabs[1];
+        MouseEvent click_second{
+            .row = second_tab.start_row,
+            .col = second_tab.start_col + 1,
+            .button = MouseButton::Left,
+            .action = MouseAction::Press,
+            .shift = false,
+            .alt = false,
+            .ctrl = false
+        };
+        bool handled = tabs.handle_mouse(click_second);
+        assert(handled);
+        assert(tabs.selected == 1);
+
+        // Wheel Down cycles to "Third"
+        MouseEvent wheel_down{
+            .row = 0,
+            .col = 0,
+            .button = MouseButton::WheelDown,
+            .action = MouseAction::Press,
+            .shift = false,
+            .alt = false,
+            .ctrl = false
+        };
+        handled = tabs.handle_mouse(wheel_down);
+        assert(handled);
+        assert(tabs.selected == 2);
+
+        // Wheel Up cycles back to "Second"
+        MouseEvent wheel_up{
+            .row = 0,
+            .col = 0,
+            .button = MouseButton::WheelUp,
+            .action = MouseAction::Press,
+            .shift = false,
+            .alt = false,
+            .ctrl = false
+        };
+        handled = tabs.handle_mouse(wheel_up);
+        assert(handled);
+        assert(tabs.selected == 1);
+    }
+
+    // 2. ListState direct mouse click & wheel
+    {
+        Frame frame(6, 20);
+        ListState list({"Option 0", "Option 1", "Option 2", "Option 3"});
+        List(list).border_style(BorderStyle::Single).draw(frame, frame.area());
+
+        // Rendered inner should be row 1..4, col 1..18
+        assert(list.rendered_inner.row == 1);
+        assert(list.selected == 0);
+
+        // Click on Option 2 (row 3)
+        MouseEvent click_opt2{
+            .row = 3,
+            .col = 5,
+            .button = MouseButton::Left,
+            .action = MouseAction::Press,
+            .shift = false,
+            .alt = false,
+            .ctrl = false
+        };
+        bool handled = list.handle_mouse(click_opt2);
+        assert(handled);
+        assert(list.selected == 2);
+
+        // Wheel Up selects Option 1
+        MouseEvent wheel_up{
+            .row = 3,
+            .col = 5,
+            .button = MouseButton::WheelUp,
+            .action = MouseAction::Press,
+            .shift = false,
+            .alt = false,
+            .ctrl = false
+        };
+        handled = list.handle_mouse(wheel_up);
+        assert(handled);
+        assert(list.selected == 1);
+
+        // Wheel Down selects Option 2
+        MouseEvent wheel_down{
+            .row = 3,
+            .col = 5,
+            .button = MouseButton::WheelDown,
+            .action = MouseAction::Press,
+            .shift = false,
+            .alt = false,
+            .ctrl = false
+        };
+        handled = list.handle_mouse(wheel_down);
+        assert(handled);
+        assert(list.selected == 2);
+    }
+
+    // 3. FocusManager integration: single click focuses AND selects sub-item
+    {
+        App app;
+        FocusManager fm;
+
+        TabsState category_tabs({"General", "Security", "Billing"}, 0);
+        ListState role_list({"Junior", "Mid", "Senior", "Lead"});
+
+        fm.add(category_tabs).add(role_list);
+        app.use_focus(fm);
+
+        // Initial state: category_tabs is focused, selected = 0
+        assert(fm.is_focused(category_tabs));
+        assert(!fm.is_focused(role_list));
+        assert(category_tabs.selected == 0);
+        assert(role_list.selected == 0);
+
+        // Render both to establish hit buffer and geometry
+        Frame& frame = app.frame();
+        frame = Frame(12, 30);
+        Area tabs_area(0, 0, 30, 2);
+        Area list_area(2, 0, 30, 6);
+
+        Tabs(category_tabs).draw(frame, tabs_area);
+        List(role_list).border_style(BorderStyle::Single).draw(frame, list_area);
+
+        // Click on list item "Senior" (inner row is 3. Row 3 = "Junior", Row 4 = "Mid", Row 5 = "Senior")
+        MouseEvent click_senior{
+            .row = 5,
+            .col = 5,
+            .button = MouseButton::Left,
+            .action = MouseAction::Press,
+            .shift = false,
+            .alt = false,
+            .ctrl = false
+        };
+        app.dispatch_event(Event{click_senior});
+
+        // Verifications:
+        // 1. Focus shifted to role_list!
+        assert(!fm.is_focused(category_tabs));
+        assert(fm.is_focused(role_list));
+        // 2. Specific item "Senior" (index 2) was selected in the same click!
+        assert(role_list.selected == 2);
+
+        // Mouse wheel over category_tabs (row 0, col 5) scrolls tabs even without switching focus
+        MouseEvent wheel_tabs{
+            .row = 0,
+            .col = 5,
+            .button = MouseButton::WheelDown,
+            .action = MouseAction::Press,
+            .shift = false,
+            .alt = false,
+            .ctrl = false
+        };
+        app.dispatch_event(Event{wheel_tabs});
+        assert(category_tabs.selected == 1); // Switched to "Security"!
+    }
+
+    std::cout << "PASSED\n";
+}
+
+void test_modal_mouse_focus_transition()
+{
+    std::cout << "[Test 23] Modal popup focus transition on mouse click & repeat cycles... ";
+
+    App app;
+    FocusManager fm;
+
+    ListState files_list({"main.cpp", "core.cpp"});
+    TextAreaState editor_state("void main() {}");
+    const Id id_btn_delete("btn_delete");
+
+    TextInputState delete_confirm_input;
+    const Id id_modal_cancel("modal_cancel");
+
+    enum class ActiveModal { None, DeleteConfirm };
+    ActiveModal active_modal = ActiveModal::None;
+
+    auto close_modal = [&]() {
+        if (active_modal != ActiveModal::None) {
+            fm.pop_scope();
+            active_modal = ActiveModal::None;
+        }
+    };
+
+    fm.add(files_list)
+      .add(editor_state)
+      .add(id_btn_delete, [&](const KeyEvent& k) {
+          if (k.is(Key::Enter)) {
+              active_modal = ActiveModal::DeleteConfirm;
+              delete_confirm_input.clear();
+              fm.push_scope(Id("delete_modal"), ScopeMode::Modal);
+              fm.add(delete_confirm_input).add(id_modal_cancel);
+              return true;
+          }
+          return false;
+      });
+
+    app.use_focus(fm);
+
+    app.on_render([&](Frame& frame) {
+        Box().id(id_btn_delete).draw(frame, Area(10, 10, 20, 3));
+        TextArea(editor_state).draw(frame, Area(0, 0, 40, 10));
+
+        if (active_modal == ActiveModal::DeleteConfirm) {
+            Area modal_area(5, 5, 30, 8);
+            Box().draw(frame, modal_area);
+            TextInput(delete_confirm_input).draw(frame, Area(6, 6, 25, 3));
+            Box().id(id_modal_cancel).draw(frame, Area(9, 6, 12, 3));
+        }
+    });
+
+    app.frame() = Frame(24, 80);
+    app.draw_frame(false);
+
+    // Initial state: files_list is focused. Switch focus to editor_state.
+    fm.focus(editor_state);
+    app.draw_frame(false);
+    assert(fm.is_focused(editor_state));
+    assert(editor_state.focused);
+
+    MouseEvent click_delete{
+        .row = 11,
+        .col = 11,
+        .button = MouseButton::Left,
+        .action = MouseAction::Press,
+        .shift = false,
+        .alt = false,
+        .ctrl = false
+    };
+
+    for (int cycle = 1; cycle <= 3; ++cycle)
+    {
+        // Click on delete button with mouse:
+        app.dispatch_event(Event{click_delete});
+        app.draw_frame(false);
+
+        // Verification 1: Modal is now open
+        assert(active_modal == ActiveModal::DeleteConfirm);
+
+        // Verification 2: Focus shifted IMMEDIATELY to modal popup input!
+        assert(!fm.is_focused(editor_state));
+        assert(fm.is_focused(delete_confirm_input));
+        assert(!editor_state.focused);
+        assert(delete_confirm_input.focused);
+
+        // Close modal via Escape
+        close_modal();
+        app.draw_frame(false);
+
+        // Verification 3: Focus restored back to button that opened modal
+        assert(active_modal == ActiveModal::None);
+        assert(fm.is_focused(id_btn_delete));
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -1230,9 +1757,12 @@ int main()
     test_universal_id_and_focus_manager();
     test_spatial_navigation_and_modal_isolation();
     test_app_use_focus_and_mouse();
+    test_audit_fixes_and_edge_cases();
+    test_subitem_mouse_interaction();
+    test_modal_mouse_focus_transition();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 20 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 23 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

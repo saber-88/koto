@@ -3,30 +3,34 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux-orange.svg?logo=linux)](https://kernel.org)
-[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-15%20Passing-brightgreen.svg)]()
+[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-23%20Passing-brightgreen.svg)]()
 [![CJK & Unicode](https://img.shields.io/badge/Unicode-7%20Passing-brightgreen.svg)]()
 [![Zero Warnings](https://img.shields.io/badge/Compiler%20Warnings-Zero-brightgreen.svg)]()
 
-> **koto** (琴) is a modern, dependency-free, high-performance C++23 Terminal User Interface (TUI) engine engineered for deterministic state management (`UI = f(state)`), differential double-buffered rendering, tear-free atomic GPU frame presentation, universal keyboard escape decoding, and CI/CD automated headless snapshot testing.
+> **koto** (琴) is a modern, dependency-free, high-performance C++23 Terminal User Interface (TUI) engine engineered for deterministic state management (`UI = f(state)`), differential double-buffered rendering, tear-free atomic GPU frame presentation, universal keyboard escape decoding, hardware-like $O(1)$ hit-buffer spatial mouse interaction, and CI/CD automated headless snapshot testing.
 
 ---
 
 ## 🌟 Why koto?
 
-Traditional terminal UI development in C and C++ has long been burdened by low-level, stateful C APIs (`ncurses`), callback spaghetti, fragile escape sequence parsing, terminal teardown corruption, screen tearing, and an inability to execute headless unit tests in CI/CD pipelines.
+Traditional terminal UI development in C and C++ has long been burdened by low-level, stateful C APIs (`ncurses`), callback spaghetti, fragile escape sequence parsing, terminal teardown corruption, screen tearing, input lag, and an inability to execute headless unit tests in CI/CD pipelines.
 
 **koto** is written from scratch in modern **C++23** to solve these architectural pain points:
 
 - **Zero External Dependencies**: Pure standard C++23 library and direct POSIX system calls. No `ncurses`, no `terminfo`, no dynamic link requirements.
 - **DEC Mode 2026 Synchronized Updates**: Emits private CSI sequences (`\033[?2026h` / `\033[?2026l`) to halt terminal rasterization during buffer writes, enabling atomic, tear-free, flicker-free single-flip frame presentation in GPU-accelerated terminals.
-- **Differential Double-Buffered Renderer**: Compares front and back cell buffers per frame. Only modified cells emit ANSI SGR sequences, batched into a single formatted `write()` syscall.
+- **Differential Double-Buffered Renderer**: Compares front and back cell buffers per frame. Only modified cells emit ANSI SGR sequences, batched into a single formatted `write()` syscall with SGR color state compression.
+- **Zero-Latency Event Loop & Burst Draining**: Drains pending input bursts with `ioctl(FIONREAD)` to completely eliminate escape sequence splitting, mouse/key inversions, and keyboard lag.
+- **First-Class Focus Engine (`FocusManager`)**: Combines 1D tab rings (`Tab` / `Shift+Tab`) and auto-harvested 2D spatial navigation (`Arrow` keys) across screen geometry with C++20 concept constraints (`FocusableState`).
+- **Hardware-like Frame Hit-Buffer**: Tags back-buffer cells with 32-bit universal compile-time `Id` tokens for $O(1)$ spatial mouse hit-testing, direct row/tab clicking, and mouse wheel scrolling.
+- **Modal Scoping & Focus Trapping (`IdScope`)**: RAII-guarded modal scopes that automatically shield background clicks, trap keyboard navigation within active dialogs, and restore previous focus on dismissal.
 - **Universal Keyboard Engine & Kitty Protocol (`CSI u`)**: Automatically negotiates Kitty keyboard enhancement flag 1 (`\033[>1u` / `\033[<u`) to disambiguate `Tab` vs `Ctrl+I`, `Enter` vs `Ctrl+M`, `Escape`, modifier bitmasks (formula: `M = 1 + flags`, including Meta / Super / Windows keys), and functional keycodes across Kitty, Ghostty, Alacritty, WezTerm, Foot, GNOME Terminal, Konsole, xterm, tmux, and SSH.
 - **Bracketed Paste Mode (`\033[?2004h`)**: Captures clipboard streams inside dedicated `PasteEvent`s, protecting against runaway auto-indentation ("staircase effect"), frame render storms, and malicious terminal command injection.
 - **Deterministic State Architecture (`UI = f(state)`)**: Decouples business logic and navigation (`TextAreaState`, `ListState`, `TextInputState`, `TabsState`) from pure, immutable views (`TextArea`, `List`, `TextInput`, `Tabs`).
-- **Native C++23 Language Features**: Multidimensional 2D subscripting (`frame[r, c]`, `grid[r, c]`), exception-free `std::expected` error handling (`try_parse_color`), `std::views::enumerate` range pipelines, and defaulted comparison operators (`Area`).
+- **Native C++23 Language Features**: Multidimensional 2D subscripting (`frame[r, c]`, `grid[r, c]`), exception-free `std::expected` error handling (`try_parse_color`), `std::views::enumerate` range pipelines, and defaulted comparison operators (`Area`, `Id`).
 - **Headless Snapshot Testing by Default**: Create an in-memory `Frame(rows, cols)` without a live TTY or virtual framebuffer, draw any widget, and assert on exact row text with `frame.to_plain_text_row(r)`.
 - **Wide Unicode, CJK & Emoji Engine**: Full UAX-11 East Asian Width calculation, 2-column continuation cells, emoji rendering, and safe overwrite clipping.
-- **Zero Warnings**: Compiles cleanly with `-Wall -Werror -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast`.
+- **Zero Warnings**: Compiles cleanly under strict compiler flags: `-Wall -Werror -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast`.
 
 ---
 
@@ -34,14 +38,16 @@ Traditional terminal UI development in C and C++ has long been burdened by low-l
 
 ```
 +---------------------------------------------------------------------------------+
-| Layer 3: Declarative Application Runtime (koto::App)                             |
+| Layer 3: Declarative Application Runtime & Focus Engine (koto::App, FocusManager) |
 | - RAII terminal lifecycle, 60 FPS tick, signalfd SIGWINCH resize handling       |
-| - Event dispatch: on_key, on_paste (with fallback to on_key), on_tick, on_render |
+| - FocusManager: 1D Tab Ring, 2D Spatial Arrow Jumps, Pre-dispatch Interceptors  |
+| - IdScope: RAII Modal Scoping, Focus Trapping & Background Shielding            |
+| - Event dispatch: on_key, on_mouse, on_paste, on_tick, on_render                |
 +---------------------------------------------------------------------------------+
 | Layer 2: State-Driven Widgets & Layout Engine                                   |
 | - TextArea: Gutter line numbers, Sticky/Clamp cursor, Margin/Clamp scroll       |
-| - Tabs: Bar, Pill, Underline styles with circular navigation & reactive hooks   |
-| - List: Full-width row highlights, Wrap/Clamp navigation, Ellipsis clipping     |
+| - Tabs: Bar, Pill, Underline styles, sub-item mouse hit detection & wheel cycle |
+| - List: Full-width row highlights, Wrap/Clamp navigation, sub-item row clicking |
 | - TextInput: UTF-8 sliding window scroll, pre-hook filters, cursor sync         |
 | - Box: Rounded, Single, Double, Thick borders with 3-way title alignment        |
 | - Gauge: Unicode fractional sub-cell resolution (1/8th increments: ▏▎▍▌▋▊▉█)     |
@@ -53,7 +59,8 @@ Traditional terminal UI development in C and C++ has long been burdened by low-l
 | Layer 1: The Metal Core                                                         |
 | - Terminal: RAII raw mode, alternate screen buffer, bracketed paste negotiation |
 | - Frame: Double-buffered cell grid, DEC Mode 2026 atomic synchronized updates   |
-| - EventLoop: POSIX signalfd SIGWINCH, universal escape tokenizer, CSI u parser  |
+| - Hit-Buffer: 32-bit spatial ID raster map for O(1) mouse hit-testing           |
+| - EventLoop: POSIX signalfd SIGWINCH, ioctl FIONREAD burst draining, SGR 1006   |
 | - Cell & Color: 24-bit TrueColor RGB, 256-color palette, linear lerp gradients |
 | - UTF-8: Codepoint widths, multi-byte decoding, wide CJK & 2-column emojis      |
 +---------------------------------------------------------------------------------+
@@ -384,6 +391,49 @@ board.for_each([&](size_t row, size_t col, const Area& square) {
 
 ---
 
+### 11. `FocusManager` & `IdScope` (Spatial Navigation, Mouse Hit-Testing & Modal Trapping)
+The `FocusManager` orchestrates bi-directional keyboard navigation and mouse hit-testing across arbitrary widgets with zero heap allocations in the hot draw path:
+
+* **1D Tab Ring**: Cycles forward with `Tab` and backward with `Shift+Tab`.
+* **2D Spatial Arrow Navigation**: Computes Euclidean distance and directional angle cones between bounding box centroids, enabling natural `Up`, `Down`, `Left`, and `Right` arrow navigation across multi-column grids or disjoint cards.
+* **C++20 Concept Constraint (`FocusableState`)**: Automatically accepts any widget state object exposing `handle_key(const KeyEvent&) -> bool` (`TextInputState`, `TextAreaState`, `ListState`, `TabsState`).
+* **Pre-Dispatch Interceptor Hook**: `fm.interceptor([](const KeyEvent& k, FocusTarget* active) -> bool)` allows application developers to intercept keys (e.g. global shortcuts, modal escape, Vim modes) before focus routing.
+* **Modal Focus Trapping & Background Shielding (`IdScope`)**: RAII modal scopes (`push_scope(id, ScopeMode::Modal)`) automatically trap keyboard focus within the dialog, shield background elements from accidental mouse clicks, and restore focus to the opening widget on dismissal.
+* **$O(1)$ SGR Mouse Hit-Testing & Sub-Item Interaction**: Left-clicking any widget instantly focuses it. For complex widgets, mouse coordinates are resolved to sub-items:
+  * **`Tabs`**: Direct left-click selects tab headers; mouse wheel scrolls and cycles active tabs.
+  * **`List`**: Direct left-click activates rows; mouse wheel scrolls through items.
+  * **`TextArea`**: Direct left-click positions the editing cursor; mouse wheel scrolls the viewport.
+  * **Buttons**: Clicking any target with an `on_key` callback automatically synthesizes a `Key::Enter` event, firing its action handler with zero boilerplate.
+
+```cpp
+FocusManager fm;
+TextInputState username;
+TextInputState password;
+bool submit_clicked = false;
+
+// 1. Declaratively register interactive targets
+fm.register_target(ID("user"), username, user_area);
+fm.register_target(ID("pass"), password, pass_area);
+fm.register_target(ID("submit"), submit_area, [&](const KeyEvent& k) {
+    if (k.is(Key::Enter)) {
+        submit_clicked = true;
+        return true;
+    }
+    return false;
+});
+
+// 2. Attach focus manager to the application runtime
+app.use_focus(fm);
+
+// 3. Render widgets with automatic visual focus feedback
+Box().title(" Username ")
+     .focused(fm.is_focused(ID("user")))
+     .draw(frame, user_area);
+TextInput(username).draw(frame, user_area);
+```
+
+---
+
 ## ⚡ Metal Core & Terminal Protocols
 
 ### DEC Mode 2026 (Synchronized Updates)
@@ -433,6 +483,31 @@ app.on_paste([&](const std::string& text) {
 
 ---
 
+### SGR 1006 Extended Mouse Protocol & Frame Hit-Buffer
+Modern terminal emulators communicate mouse interaction (presses, releases, drags, and wheel turns) through the SGR 1006 extended mouse protocol (`\033[?<mode>h`):
+- `\033[?1000h` / `\033[?1002h`: Enable normal click and button-motion mouse tracking.
+- `\033[?1006h`: Enable SGR extended coordinate reporting (`<btn>;<col>;<row>M` / `m`), breaking free of the legacy 223-column ANSI byte limit.
+
+`koto` pairs this with a hardware-like **32-bit universal Frame Hit-Buffer**:
+- Every cell in the back buffer stores a 32-bit `Id` tag (defaulting to `-1`).
+- Widgets tag rendered screen cells via `frame.set_hit_id(r, c, id)`.
+- When an `SGR 1006` mouse event arrives at `(row, col)`, `frame.hit_test(row, col)` performs an instantaneous $O(1)$ lookup, mapping physical screen pixels directly to the target widget.
+- **Sub-Item Coordinates**: Complex widgets calculate internal hits (`TabsState::tab_at(col)`, `ListState::row_at(row)`, `TextAreaState::coord_at(row, col)`).
+- **Automatic Button Synthesis**: Clicking any target registered with an `on_key` callback automatically synthesizes a `Key::Enter` event to trigger its action handler with zero boilerplate.
+
+---
+
+### Zero-Latency Event Loop & `ioctl(FIONREAD)` Burst Draining
+Rapid mouse drags or wheel bursts can emit dozens of escape sequences per millisecond. Traditional TUI loops that read byte-by-byte or fixed chunks risk splitting escape sequences across reads or starving the keyboard.
+
+`koto` eliminates this entirely:
+- Queries pending bytes via `ioctl(FIONREAD)` on the TTY file descriptor.
+- Batches burst reads into an internal stream buffer.
+- Complete escape sequences are parsed atomically before dispatch.
+- Completely prevents mouse/keyboard inversions, cursor lag, or torn escape packets.
+
+---
+
 ## 🧪 Headless Snapshot Testing (CI/CD Ready)
 
 `koto` was engineered from day one for test-driven development. You can construct an in-memory `Frame(rows, cols)` without attaching to a terminal, execute layout and widget draws, and assert on exact characters:
@@ -468,7 +543,7 @@ void test_box_and_list()
 
 Run the built-in test suites:
 ```bash
-# 15 comprehensive snapshot tests (Box, List, Layout, Gauge, Sparkline, Grid, TextArea, Tabs, Kitty CSI u, Paste, C++23 native features)
+# 23 comprehensive snapshot tests (Box, List, Layout, Gauge, Sparkline, Grid, TextArea, Tabs, Kitty CSI u, Paste, C++23 native features, Hit-Buffer, FocusManager, Spatial 2D, Modal Scoping, Sub-item clicks)
 ./build/test6_headless_test
 
 # 7 UTF-8 / CJK / Emoji width & continuation cell tests
@@ -479,7 +554,7 @@ Run the built-in test suites:
 
 ## 📂 Included Showcase Applications
 
-The repository includes **12 standalone showcase programs** demonstrating every feature of the library:
+The repository includes **15 standalone showcase programs** demonstrating every feature of the library:
 
 | Executable | Description |
 |---|---|
@@ -489,19 +564,25 @@ The repository includes **12 standalone showcase programs** demonstrating every 
 | **`test3_vbox`** | Declarative flex and percentage layout composition (`VBox` / `HBox`). |
 | **`test4_text_input`** | 3-layer input customization: Pre-hook interceptors, validation filters, and modal Vim editing with `Tab` / `Shift+Tab` focus cycling. |
 | **`test5_yazi`** | A 3-column Miller column file explorer inspired by Yazi with live file previews via `TextArea`. |
-| **`test6_headless_test`** | Automated headless snapshot test suite with 15 tests and zero terminal dependencies. |
+| **`test6_headless_test`** | Automated headless snapshot test suite with 23 tests and zero terminal dependencies. |
 | **`test7_dashboard`** | Real-time 60 FPS system telemetry monitor demonstrating Gauge with fractional sub-blocks, rolling Sparklines, titled Rules, and Color lerping. |
 | **`test8_text_cjk_emoji`** | Comprehensive UTF-8 test suite asserting CJK ideographs, 2-column emojis, continuation cells, overwrite protection, and wide text alignment. |
 | **`test9_chess_board`** | Fully playable 8x8 interactive Chess board demonstrating `Layout::grid_uniform`, `Frame::fill`, alternating wood squares, and Unicode chess piece rendering. |
 | **`test10_cjk_terminal`** | Interactive live terminal inspector for Japanese (Kanji/Kana), Chinese, Korean (Hangul), 2-column Emojis, vertical alignment ruler, and live UTF-8 input with `Tabs`. |
 | **`test11_text_area`** | Multi-line code editor with line numbers gutter, Sticky/Clamp cursor navigation, Margin/Clamp viewport scrolling, and real-time status telemetry. |
 | **`test12_tabs`** | Multi-tab container orchestrating `TextArea`, `List`, `Gauge`, `Sparkline`, and `Grid` chess board with live tab style switching. |
+| **`test13_focus_form`** | Interactive multi-field user registration form with 1D Tab cycle, `TextInputState`, `ListState`, `TabsState`, button activation, and dynamic visual focus states. |
+| **`test14_spatial_2d_nav`** | 2D spatial navigation demo with 3x3 disconnected card grid, Euclidean centroid jumps across Arrow keys (`Up`, `Down`, `Left`, `Right`), and direct mouse click selection. |
+| **`test15_modal_focus_trap`** | Modal dialog workflow with confirmation popups, background mouse click shielding, automatic modal focus trapping, Escape dismiss, and focus restoration. |
 
 Run any showcase directly from `./build/`:
 ```bash
 ./build/test7_dashboard
 ./build/test9_chess_board
 ./build/test12_tabs
+./build/test13_focus_form
+./build/test14_spatial_2d_nav
+./build/test15_modal_focus_trap
 ```
 
 ---
@@ -526,13 +607,20 @@ Run any showcase directly from `./build/`:
   - [x] `Sparkline` with 8-level Unicode time-series data graphs
   - [x] `Rule` horizontal dividers with embedded titles
   - [x] `Layout::grid` and `Layout::grid_uniform` 2D coordinate matrices
-- [ ] **Phase 3: High-Level UI Runtime & Composition**
-  - [ ] `FocusManager` with automatic `Tab` / `Shift+Tab` focus graph traversal
-  - [ ] Declarative layout container trees (`VStack`, `HStack` with `{}` syntax)
-  - [ ] Modal dialogs and overlay popup layers
-- [ ] **Phase 4: Advanced Components**
-  - [ ] Data Table widget with sortable columns and horizontal scroll
-  - [ ] Mouse event handling (clicks, drags, scroll wheel)
+- [x] **Phase 3: Focus Engine, Spatial Navigation & Modal Scoping**
+  - [x] `FocusManager` 1D ring focus graph traversal (`Tab` / `Shift+Tab`)
+  - [x] Auto-harvested 2D spatial arrow navigation (`Up`, `Down`, `Left`, `Right`) via centroid distance & angle cone
+  - [x] Hardware-like 32-bit `Frame` hit-buffer with $O(1)$ spatial coordinate tagging
+  - [x] SGR 1006 mouse protocol support (clicks, releases, drags, scroll wheel up/down)
+  - [x] Sub-item direct mouse hit detection (`Tabs` headers, `List` rows, `TextArea` lines/cols)
+  - [x] `IdScope` RAII modal focus trapping and background click shielding
+  - [x] Pre-dispatch key interceptor hook for custom shortcuts and navigation overrides
+  - [x] `App::use_focus(fm)` seamless declarative runtime integration
+  - [x] `ioctl(FIONREAD)` input burst draining to eliminate input latency and packet splitting
+- [ ] **Phase 4: Advanced Data & Tree Components**
+  - [ ] `Table` widget with sortable columns, header styles, horizontal scroll, and cell formatters
+  - [ ] `Tree` widget for hierarchical directory structures and expandable nodes
+  - [ ] Multi-select lists and checkboxes
 
 ---
 

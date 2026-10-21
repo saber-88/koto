@@ -33,6 +33,7 @@ namespace koto
         size_t scroll_col = 0;
         size_t scroll_margin = 1;
         bool show_line_number = true;
+        bool focused = true;
 
         CursorColumnMode cursor_mode = CursorColumnMode::Sticky;
         ScrollMode scroll_mode = ScrollMode::Margin;
@@ -59,6 +60,7 @@ namespace koto
         std::string to_string() const;
 
         bool handle_event(const KeyEvent& key);
+        bool handle_mouse(const MouseEvent& mouse);
     };
 
     class TextArea : public Widget
@@ -77,6 +79,9 @@ namespace koto
         TextArea& line_number_fg(std::string_view fg);
         TextArea& line_number_fg(uint32_t fg);
         TextArea& focused(bool f);
+        TextArea& focused_border_fg(std::string_view fg);
+        TextArea& focused_border_fg(uint32_t fg);
+        TextArea& id(Id tag_id);
         TextArea& cursor_mode(CursorColumnMode mode);
         TextArea& scroll_mode(ScrollMode mode, size_t margin = 1);
 
@@ -92,5 +97,8 @@ namespace koto
         uint32_t m_bg = COLOR_DEFAULT;
         uint32_t m_line_number_fg = Color::DarkGray;
         bool m_focused = true;
+        bool m_has_focused_override = false;
+        uint32_t m_focused_border_fg = Color::Cyan;
+        Id m_id = Id::none();
     };
 }

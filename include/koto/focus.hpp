@@ -30,6 +30,11 @@ namespace koto
         { s.handle_event(k) } -> std::convertible_to<bool>;
     };
 
+    template<typename T>
+    concept HasMouseHandler = requires(T& s, const MouseEvent& m) {
+        { s.handle_mouse(m) } -> std::convertible_to<bool>;
+    };
+
     // Forward declaration of FocusManager for IdScope
     class FocusManager;
 
@@ -46,6 +51,18 @@ namespace koto
         Normal,
         Modal
     };
+
+    enum class FocusNavPolicy : uint8_t
+    {
+        TabOnly,        // Tab / Shift+Tab only. Arrows reserved for widgets (text cursor, list scroll). Default.
+        SpatialArrows,  // Tab / Shift+Tab AND Arrow keys navigate 2D spatial layouts.
+        AltArrows,      // Tab / Shift+Tab for 1D ring; Alt+Arrow keys for 2D spatial jumps.
+        Custom          // Fully controlled by custom interceptors.
+    };
+
+    using FocusKeyInterceptor = std::function<bool(FocusManager& fm, const KeyEvent& key)>;
+    using FocusChangeValidator = std::function<bool(FocusManager& fm, Id from_id, Id to_id)>;
+    using FocusChangeObserver = std::function<void(Id from_id, Id to_id)>;
 
     // =========================================================================
     // RAII Scope Guard: IdScope
@@ -82,10 +99,11 @@ namespace koto
         Id id;
         Area bounds = Area{0, 0, 0, 0};
         Id modal_scope = Id::none();
-        std::function<void(bool)> set_focus;              // updates .focused on the underlying state
-        std::function<bool(const KeyEvent&)> handle_key;  // routes key event to the underlying state
-        std::function<void()> on_focus;                   // optional user hook when focus gained
-        std::function<void()> on_blur;                    // optional user hook when focus lost
+        std::function<void(bool)> set_focus;                 // updates .focused on the underlying state
+        std::function<bool(const KeyEvent&)> handle_key;     // routes key event to the underlying state
+        std::function<bool(const MouseEvent&)> handle_mouse; // routes mouse event to the underlying state
+        std::function<void()> on_focus;                      // optional user hook when focus gained
+        std::function<void()> on_blur;                       // optional user hook when focus lost
     };
 
     // =========================================================================
@@ -105,12 +123,19 @@ namespace koto
             Id scoped = this->scoped_id(id);
             Id current_modal = this->active_modal_scope();
 
+            std::function<bool(const MouseEvent&)> mouse_handler = nullptr;
+            if constexpr (HasMouseHandler<T>)
+            {
+                mouse_handler = [&state](const MouseEvent& m) { return state.handle_mouse(m); };
+            }
+
             FocusTarget target{
                 .id = scoped,
                 .bounds = Area{0, 0, 0, 0},
                 .modal_scope = current_modal,
                 .set_focus = [&state](bool f) { state.focused = f; },
                 .handle_key = [&state](const KeyEvent& k) { return state.handle_event(k); },
+                .handle_mouse = std::move(mouse_handler),
                 .on_focus = nullptr,
                 .on_blur = nullptr
             };
@@ -119,12 +144,13 @@ namespace koto
             return *this;
         }
 
-        // 2. Register a stateless Box or Panel with an ID and optional key callback
-        FocusManager& add(Id id, std::function<bool(const KeyEvent&)> on_key = nullptr);
+        // 2. Register a stateless Box or Panel with an ID and optional key/mouse callbacks
+        FocusManager& add(Id id, std::function<bool(const KeyEvent&)> on_key = nullptr,
+                                 std::function<bool(const MouseEvent&)> on_mouse = nullptr);
 
         // Navigation (Tab / Shift+Tab / Index / Id / State)
-        void next();                               // Tab forward
-        void prev();                               // Shift+Tab / BackTab backward
+        bool next();                               // Tab forward
+        bool prev();                               // Shift+Tab / BackTab backward
         bool focus(size_t index);                  // Focus by 0-based ring index
         bool focus_id(Id id);                      // Focus by Id token (from click or code)
 
@@ -166,6 +192,22 @@ namespace koto
         // Returns true if consumed, false if unhandled (passes to global hotkeys).
         bool handle_key(const KeyEvent& key);
 
+        // Navigation Policy & Spatial Settings
+        FocusManager& navigation_policy(FocusNavPolicy policy) noexcept;
+        FocusNavPolicy navigation_policy() const noexcept { return m_policy; }
+        FocusManager& enable_spatial_arrows(bool enable = true) noexcept;
+
+        // Developer Interceptor Hooks
+        FocusManager& interceptor(FocusKeyInterceptor fn);
+        FocusManager& can_focus(FocusChangeValidator fn);
+        FocusManager& on_focus_change(FocusChangeObserver fn);
+
+        // Mouse routing: queries Frame hit-buffer at (mouse.row, mouse.col).
+        // For clicks (Press + Left), shifts focus to the target widget and forwards mouse event.
+        // For wheel (WheelUp / WheelDown), forwards mouse event to the hovered widget.
+        // If inside a modal scope, mouse events outside the modal are absorbed & shielded.
+        bool handle_mouse(const MouseEvent& mouse, const Frame& frame);
+
         // Mouse click integration: queries Frame hit-buffer at (row, col)
         // If a valid tagged widget was clicked, shifts focus to it and returns true.
         // If inside a modal scope, clicks outside the modal are absorbed & shielded.
@@ -199,6 +241,11 @@ namespace koto
         size_t m_active_index = 0;
         std::vector<ScopeEntry> m_scope_stack;
         std::vector<size_t> m_saved_focus_stack;
+
+        FocusNavPolicy m_policy = FocusNavPolicy::TabOnly;
+        FocusKeyInterceptor m_key_interceptor = nullptr;
+        FocusChangeValidator m_change_validator = nullptr;
+        FocusChangeObserver m_change_observer = nullptr;
 
         void register_target(FocusTarget target);
     };

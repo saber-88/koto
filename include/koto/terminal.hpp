@@ -30,6 +30,8 @@ namespace koto
             auto disable_kitty_keyboard() const -> void;
             auto enable_mouse_capture() const -> void;
             auto disable_mouse_capture() const -> void;
+            auto enable_mouse_drag() const -> void;
+            auto disable_mouse_drag() const -> void;
             
         private:
         

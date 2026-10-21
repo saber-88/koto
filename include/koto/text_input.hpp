@@ -68,6 +68,8 @@ namespace koto
             TextInput& placeholder_fg(uint32_t color);
             TextInput& focused_border_fg(std::string_view color);
             TextInput& focused_border_fg(uint32_t color);
+            TextInput& focused(bool is_focused);
+            TextInput& id(Id tag_id);
 
             void draw(Frame& frame, Area area) override;
 
@@ -80,5 +82,8 @@ namespace koto
             uint32_t m_bg = COLOR_DEFAULT;
             uint32_t m_placeholder_fg = 0x00888888;
             uint32_t m_focused_border_fg = 0x0055FFFF;
+            bool m_focused = false;
+            bool m_has_focused_override = false;
+            Id m_id = Id::none();
     };
 }

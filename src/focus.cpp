@@ -51,30 +51,42 @@ namespace koto
     {
         Id current_modal = this->active_modal_scope();
 
-        if (m_targets.empty())
+        // 1. If target is already registered (by id), update it in place without duplicating
+        for (size_t i = 0; i < m_targets.size(); ++i)
         {
-            if (target.set_focus) target.set_focus(true);
-            if (target.on_focus) target.on_focus();
-            m_targets.push_back(std::move(target));
-            m_active_index = 0;
-            return;
+            if (m_targets[i].id == target.id)
+            {
+                m_targets[i].bounds = target.bounds;
+                m_targets[i].modal_scope = target.modal_scope;
+                m_targets[i].set_focus = std::move(target.set_focus);
+                m_targets[i].handle_key = std::move(target.handle_key);
+                m_targets[i].handle_mouse = std::move(target.handle_mouse);
+                m_targets[i].on_focus = std::move(target.on_focus);
+                m_targets[i].on_blur = std::move(target.on_blur);
+
+                // If inside a modal scope and currently active target is outside the modal,
+                // activate this modal target!
+                if (!current_modal.is_none() && target.modal_scope == current_modal)
+                {
+                    bool active_is_in_modal = (m_active_index < m_targets.size() &&
+                                               m_targets[m_active_index].modal_scope == current_modal);
+                    if (!active_is_in_modal)
+                    {
+                        this->focus(i);
+                    }
+                }
+                return;
+            }
         }
 
-        // If inside a modal scope, check if this is the first target in the modal
-        if (!current_modal.is_none())
+        // 2. New target: if inside a modal and currently active target is outside the modal,
+        // activate this modal target immediately!
+        if (!current_modal.is_none() && target.modal_scope == current_modal)
         {
-            bool first_in_modal = true;
-            for (const auto& t : m_targets)
+            bool active_is_in_modal = (m_active_index < m_targets.size() &&
+                                       m_targets[m_active_index].modal_scope == current_modal);
+            if (!active_is_in_modal)
             {
-                if (t.modal_scope == current_modal)
-                {
-                    first_in_modal = false;
-                    break;
-                }
-            }
-            if (first_in_modal)
-            {
-                // Deactivate old active target
                 if (m_active_index < m_targets.size())
                 {
                     auto& old_t = m_targets[m_active_index];
@@ -89,11 +101,21 @@ namespace koto
             }
         }
 
+        if (m_targets.empty())
+        {
+            if (target.set_focus) target.set_focus(true);
+            if (target.on_focus) target.on_focus();
+            m_targets.push_back(std::move(target));
+            m_active_index = 0;
+            return;
+        }
+
         if (target.set_focus) target.set_focus(false);
         m_targets.push_back(std::move(target));
     }
 
-    FocusManager& FocusManager::add(Id id, std::function<bool(const KeyEvent&)> on_key)
+    FocusManager& FocusManager::add(Id id, std::function<bool(const KeyEvent&)> on_key,
+                                           std::function<bool(const MouseEvent&)> on_mouse)
     {
         Id scoped = this->scoped_id(id);
         Id current_modal = this->active_modal_scope();
@@ -104,6 +126,7 @@ namespace koto
             .modal_scope = current_modal,
             .set_focus = nullptr,
             .handle_key = std::move(on_key),
+            .handle_mouse = std::move(on_mouse),
             .on_focus = nullptr,
             .on_blur = nullptr
         };
@@ -112,11 +135,11 @@ namespace koto
         return *this;
     }
 
-    void FocusManager::next()
+    bool FocusManager::next()
     {
         if (m_targets.empty())
         {
-            return;
+            return false;
         }
 
         Id current_modal = this->active_modal_scope();
@@ -134,15 +157,16 @@ namespace koto
 
         if (next_idx != m_active_index)
         {
-            this->focus(next_idx);
+            return this->focus(next_idx);
         }
+        return false;
     }
 
-    void FocusManager::prev()
+    bool FocusManager::prev()
     {
         if (m_targets.empty())
         {
-            return;
+            return false;
         }
 
         Id current_modal = this->active_modal_scope();
@@ -160,8 +184,9 @@ namespace koto
 
         if (prev_idx != m_active_index)
         {
-            this->focus(prev_idx);
+            return this->focus(prev_idx);
         }
+        return false;
     }
 
     bool FocusManager::focus(size_t index)
@@ -176,6 +201,15 @@ namespace koto
             return true;
         }
 
+        Id old_id = (m_active_index < m_targets.size()) ? m_targets[m_active_index].id : Id::none();
+        Id new_id = m_targets[index].id;
+
+        // Run validator if registered (can veto focus change!)
+        if (m_change_validator && !m_change_validator(*this, old_id, new_id))
+        {
+            return false;
+        }
+
         if (m_active_index < m_targets.size())
         {
             auto& old_target = m_targets[m_active_index];
@@ -188,6 +222,12 @@ namespace koto
         auto& new_target = m_targets[m_active_index];
         if (new_target.set_focus) new_target.set_focus(true);
         if (new_target.on_focus) new_target.on_focus();
+
+        if (m_change_observer)
+        {
+            m_change_observer(old_id, new_id);
+        }
+
         return true;
     }
 
@@ -362,19 +402,32 @@ namespace koto
             return false;
         }
 
-        // 1. Tab / Shift+Tab -> 1D ring navigation
-        if (key.is(Key::BackTab))
+        // 1. Run developer's custom FocusKeyInterceptor FIRST if registered!
+        if (m_key_interceptor && m_key_interceptor(*this, key))
         {
-            this->prev();
-            return true;
-        }
-        if (key.is(Key::Tab))
-        {
-            this->next();
             return true;
         }
 
-        // 2. Focused target key handler (e.g. typing into TextInput, custom callbacks)
+        // 2. Tab / Shift+Tab -> 1D ring navigation (always consistent and predictable)
+        if (key.is(Key::BackTab))
+        {
+            return this->prev();
+        }
+        if (key.is(Key::Tab))
+        {
+            return this->next();
+        }
+
+        // 3. Alt+Arrows spatial jumping (if policy is AltArrows)
+        if (m_policy == FocusNavPolicy::AltArrows && key.alt)
+        {
+            if (key.is(Key::Up) || key.ch == static_cast<uint32_t>(Key::AltUp)) return this->move(Direction::Up);
+            if (key.is(Key::Down) || key.ch == static_cast<uint32_t>(Key::AltDown)) return this->move(Direction::Down);
+            if (key.is(Key::Left) || key.ch == static_cast<uint32_t>(Key::AltLeft)) return this->move(Direction::Left);
+            if (key.is(Key::Right) || key.ch == static_cast<uint32_t>(Key::AltRight)) return this->move(Direction::Right);
+        }
+
+        // 4. Focused target key handler (typing in TextInput, editor in TextArea, items in List, tabs in Tabs)
         if (m_active_index < m_targets.size() && m_targets[m_active_index].handle_key)
         {
             if (m_targets[m_active_index].handle_key(key))
@@ -383,22 +436,119 @@ namespace koto
             }
         }
 
-        // 3. Arrow keys -> Spatial 2D navigation (if unconsumed by target)
-        if (key.is(Key::Up))
+        // 5. Arrow keys -> Spatial 2D navigation (ONLY when policy is SpatialArrows!)
+        // In default TabOnly mode, unconsumed arrow keys will NEVER hijack focus away from the widget!
+        if (m_policy == FocusNavPolicy::SpatialArrows)
         {
-            return this->move(Direction::Up);
+            if (key.is(Key::Up))    return this->move(Direction::Up);
+            if (key.is(Key::Down))  return this->move(Direction::Down);
+            if (key.is(Key::Left))  return this->move(Direction::Left);
+            if (key.is(Key::Right)) return this->move(Direction::Right);
         }
-        if (key.is(Key::Down))
+
+        return false;
+    }
+
+    FocusManager& FocusManager::navigation_policy(FocusNavPolicy policy) noexcept
+    {
+        m_policy = policy;
+        return *this;
+    }
+
+    FocusManager& FocusManager::enable_spatial_arrows(bool enable) noexcept
+    {
+        m_policy = enable ? FocusNavPolicy::SpatialArrows : FocusNavPolicy::TabOnly;
+        return *this;
+    }
+
+    FocusManager& FocusManager::interceptor(FocusKeyInterceptor fn)
+    {
+        m_key_interceptor = std::move(fn);
+        return *this;
+    }
+
+    FocusManager& FocusManager::can_focus(FocusChangeValidator fn)
+    {
+        m_change_validator = std::move(fn);
+        return *this;
+    }
+
+    FocusManager& FocusManager::on_focus_change(FocusChangeObserver fn)
+    {
+        m_change_observer = std::move(fn);
+        return *this;
+    }
+
+    bool FocusManager::handle_mouse(const MouseEvent& mouse, const Frame& frame)
+    {
+        Id hit = frame.hit_at(mouse.row, mouse.col);
+        Id current_modal = this->active_modal_scope();
+        Id scoped_hit = this->scoped_id(hit);
+
+        if (hit.is_none())
         {
-            return this->move(Direction::Down);
+            // If inside a modal, absorb clicks anywhere outside the modal
+            if (!current_modal.is_none() && mouse.action == MouseAction::Press)
+            {
+                return true;
+            }
+            return false;
         }
-        if (key.is(Key::Left))
+
+        for (size_t i = 0; i < m_targets.size(); ++i)
         {
-            return this->move(Direction::Left);
+            if (m_targets[i].id == hit || m_targets[i].id == scoped_hit)
+            {
+                // If a modal is active, events on widgets outside the modal are shielded!
+                if (!current_modal.is_none() && m_targets[i].modal_scope != current_modal)
+                {
+                    return true; // Intercepted & shielded!
+                }
+
+                // 1. Wheel events: route directly to target widget's mouse handler (e.g. list scroll, tab cycle)
+                if (mouse.button == MouseButton::WheelUp || mouse.button == MouseButton::WheelDown)
+                {
+                    if (m_targets[i].handle_mouse)
+                    {
+                        return m_targets[i].handle_mouse(mouse);
+                    }
+                    return false;
+                }
+
+                // 2. Click events (Press + Left): shift focus, then forward click to sub-item or button action
+                if (mouse.action == MouseAction::Press && mouse.button == MouseButton::Left)
+                {
+                    this->focus(i);
+                    bool sub_handled = false;
+                    if (m_targets[i].handle_mouse)
+                    {
+                        sub_handled = m_targets[i].handle_mouse(mouse);
+                    }
+                    else if (m_targets[i].handle_key)
+                    {
+                        // If element has no mouse handler but has a key handler (e.g. Button with on_key callback),
+                        // simulate an Enter keypress so clicking the button triggers its action!
+                        KeyEvent enter_key{static_cast<uint32_t>(Key::Enter)};
+                        sub_handled = m_targets[i].handle_key(enter_key);
+                    }
+                    static_cast<void>(sub_handled);
+                    return true;
+                }
+
+                // 3. Other mouse actions (Release, Right click, etc.) forwarded if handler exists
+                if (m_targets[i].handle_mouse)
+                {
+                    return m_targets[i].handle_mouse(mouse);
+                }
+
+                return false;
+            }
         }
-        if (key.is(Key::Right))
+
+        // Hit an element not in targets (e.g. modal backdrop)
+        if (!current_modal.is_none())
         {
-            return this->move(Direction::Right);
+            return true; // Absorb inside modal backdrop
         }
 
         return false;
@@ -406,34 +556,12 @@ namespace koto
 
     bool FocusManager::handle_mouse_click(int row, int col, const Frame& frame)
     {
-        Id hit = frame.hit_at(row, col);
-        if (hit.is_none())
-        {
-            return false;
-        }
-
-        Id current_modal = this->active_modal_scope();
-
-        for (size_t i = 0; i < m_targets.size(); ++i)
-        {
-            if (m_targets[i].id == hit)
-            {
-                // If a modal is active, clicks outside the modal are blocked!
-                if (!current_modal.is_none() && m_targets[i].modal_scope != current_modal)
-                {
-                    return true; // Intercepted & shielded!
-                }
-                return this->focus(i);
-            }
-        }
-
-        // Click hit an element not in targets (e.g. backdrop or non-focusable box)
-        if (!current_modal.is_none())
-        {
-            return true; // Absorb click inside modal backdrop
-        }
-
-        return false;
+        MouseEvent m{};
+        m.action = MouseAction::Press;
+        m.button = MouseButton::Left;
+        m.row = row;
+        m.col = col;
+        return this->handle_mouse(m, frame);
     }
 
     IdScope FocusManager::scope(Id scope_id)
@@ -451,6 +579,18 @@ namespace koto
         if (mode == ScopeMode::Modal)
         {
             m_saved_focus_stack.push_back(m_active_index);
+            m_scope_stack.push_back(ScopeEntry{scope_id.value(), mode});
+
+            // Automatically transfer focus to the first target inside this modal scope if already registered!
+            for (size_t i = 0; i < m_targets.size(); ++i)
+            {
+                if (m_targets[i].modal_scope == scope_id)
+                {
+                    this->focus(i);
+                    return;
+                }
+            }
+            return;
         }
         m_scope_stack.push_back(ScopeEntry{scope_id.value(), mode});
     }
