@@ -27,6 +27,7 @@ namespace koto
     {
         std::vector<std::string> titles;
         size_t selected = 0;
+        bool focused = false;
         std::function<void(size_t, const std::string&)> on_change = nullptr;
 
         TabsState() = default;

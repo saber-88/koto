@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include "koto/color.hpp"
+#include "koto/id.hpp"
 
 namespace koto
 {   
@@ -51,8 +52,8 @@ namespace koto
             Box& focused_border_fg(std::string_view fg);
             Box& focused_border_fg(uint32_t fg);
             Box& focused_border_style(BorderStyle style);
-            Box& id(int tag_id);
-            Box& tag(int tag_id);
+            Box& id(Id tag_id);
+            Box& tag(Id tag_id);
             void draw(Frame& frame, Area area) override;
 
         private:
@@ -68,6 +69,6 @@ namespace koto
             uint32_t m_focused_border_fg = Color::Cyan;
             BorderStyle m_focused_border_style = BorderStyle::Thick;
             bool m_has_focused_border_style = false;
-            int m_tag_id = -1;
+            Id m_tag_id = Id::none();
     };
 }

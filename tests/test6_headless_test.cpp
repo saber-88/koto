@@ -806,6 +806,159 @@ void test_hit_buffer_and_box_focus()
     std::cout << "PASSED\n";
 }
 
+enum class TestPanel { Sidebar, Editor, Output };
+
+void test_universal_id_and_focus_manager()
+{
+    std::cout << "[Test 18] Universal Id token & FocusManager (Tab cycle, key routing, mouse click)... ";
+
+    // 1. Id construction from string, pointer, enum, multi-part
+    {
+        Id id_str("sidebar");
+        assert(!id_str.is_none());
+        assert(id_str == Id("sidebar"));
+        assert(id_str != Id("other"));
+
+        int dummy = 42;
+        Id id_ptr(&dummy);
+        assert(!id_ptr.is_none());
+        assert(id_ptr == Id(&dummy));
+
+        Id id_enum(TestPanel::Editor);
+        assert(!id_enum.is_none());
+        assert(id_enum == Id(TestPanel::Editor));
+
+        Id part0("item", 0);
+        Id part1("item", 1);
+        assert(part0 != part1);
+        assert(part0 == Id("item", 0));
+
+        assert(Id::none().is_none());
+    }
+
+    // 2. FocusManager with rich states (TextInputState, ListState)
+    {
+        FocusManager fm;
+        TextInputState user_in("Alice");
+        TextInputState pass_in("");
+        ListState files({"doc.txt", "main.cpp"});
+
+        fm.add(user_in);
+        fm.add(pass_in);
+        fm.add(files);
+
+        // First registered element gains initial focus automatically
+        assert(user_in.focused == true);
+        assert(pass_in.focused == false);
+        assert(files.focused == false);
+        assert(fm.is_focused(user_in));
+        assert(!fm.is_focused(pass_in));
+
+        // Tab -> cycle to next (pass_in)
+        bool handled_tab = fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Tab)});
+        assert(handled_tab);
+        assert(user_in.focused == false);
+        assert(pass_in.focused == true);
+        assert(files.focused == false);
+        assert(fm.is_focused(pass_in));
+
+        // Tab -> cycle to next (files)
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Tab)});
+        assert(user_in.focused == false);
+        assert(pass_in.focused == false);
+        assert(files.focused == true);
+        assert(fm.is_focused(files));
+
+        // BackTab -> cycle backwards (pass_in)
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::BackTab)});
+        assert(pass_in.focused == true);
+        assert(files.focused == false);
+
+        // Key Routing: typing into focused pass_in
+        KeyEvent key_k{'K', false, true, false, false}; // Shift+'k' -> 'K'
+        bool routed = fm.handle_key(key_k);
+        assert(routed);
+        assert(pass_in.text() == "K");
+        assert(user_in.text() == "Alice"); // unfocused element unmodified!
+    }
+
+    // 3. Stateless Box / Panel with custom key callback
+    {
+        FocusManager fm;
+        bool logs_cleared = false;
+
+        fm.add("logs", [&](const KeyEvent& k) {
+            if (k.ch == 'c' || k.ch == 'C')
+            {
+                logs_cleared = true;
+                return true;
+            }
+            return false;
+        });
+
+        assert(fm.is_focused("logs"));
+        // 'c' triggers callback
+        bool c_consumed = fm.handle_key(KeyEvent{'c'});
+        assert(c_consumed);
+        assert(logs_cleared);
+
+        // 'x' not consumed by logs
+        bool x_consumed = fm.handle_key(KeyEvent{'x'});
+        assert(!x_consumed); // bubbles to app
+    }
+
+    // 4. Mouse click hit-testing with Frame
+    {
+        FocusManager fm;
+        TextInputState input;
+        fm.add(input, Id("my_input"));
+        fm.add("card_box");
+
+        // Initially my_input is focused
+        assert(fm.is_focused("my_input"));
+        assert(!fm.is_focused("card_box"));
+
+        // Render card_box at (5, 5, 10, 4)
+        Frame frame(15, 30);
+        Box().id("card_box").draw(frame, Area(5, 5, 10, 4));
+
+        // Click outside the box -> does not change focus
+        bool clicked_outside = fm.handle_mouse_click(0, 0, frame);
+        assert(!clicked_outside);
+        assert(fm.is_focused("my_input"));
+
+        // Click inside card_box at (6, 7) -> shifts focus to card_box!
+        bool clicked_inside = fm.handle_mouse_click(6, 7, frame);
+        assert(clicked_inside);
+        assert(fm.is_focused("card_box"));
+        assert(!fm.is_focused("my_input"));
+        assert(input.focused == false);
+    }
+
+    // 5. Scoped IDs with RAII (avoiding collisions in reusable components)
+    {
+        FocusManager fm;
+        Id id_p1;
+        Id id_p2;
+        {
+            auto scope = fm.scope("player_1");
+            id_p1 = fm.scoped_id("avatar");
+            Id id_p1_again = fm.scoped_id("avatar");
+            assert(id_p1 == id_p1_again);
+        }
+        {
+            auto scope = fm.scope("player_2");
+            id_p2 = fm.scoped_id("avatar");
+        }
+        // player_1::avatar != player_2::avatar
+        assert(id_p1 != id_p2);
+        // unscoped avatar differs from scoped avatar
+        assert(id_p2 != fm.scoped_id("avatar"));
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -829,9 +982,10 @@ int main()
     test_cpp23_modernizations();
     test_zero_overhead_modernizations();
     test_hit_buffer_and_box_focus();
+    test_universal_id_and_focus_manager();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 17 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 18 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

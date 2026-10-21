@@ -24,6 +24,7 @@ add_library(koto
     src/sparkline.cpp
     src/text_area.cpp
     src/tabs.cpp
+    src/focus.cpp
 )
 
 target_include_directories(koto PUBLIC include)

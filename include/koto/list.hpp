@@ -26,6 +26,7 @@ namespace koto
         std::vector<std::string> items;
         int selected = 0;
         int scroll = 0;
+        bool focused = false;
         ListNavigation navigation = ListNavigation::Clamp;
         std::function<void(int, const std::string&)> on_change = nullptr;
 

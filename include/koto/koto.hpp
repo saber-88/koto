@@ -19,3 +19,5 @@
 #include "sparkline.hpp"
 #include "text_area.hpp"
 #include "tabs.hpp"
+#include "id.hpp"
+#include "focus.hpp"

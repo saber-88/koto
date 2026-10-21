@@ -110,13 +110,13 @@ namespace koto
         return *this;
     }
 
-    Box& Box::id(int tag_id)
+    Box& Box::id(Id tag_id)
     {
         m_tag_id = tag_id;
         return *this;
     }
 
-    Box& Box::tag(int tag_id)
+    Box& Box::tag(Id tag_id)
     {
         m_tag_id = tag_id;
         return *this;
@@ -127,7 +127,7 @@ namespace koto
         if(!area.is_valid()) return;
 
         // Tag entire area if an ID is set so even unfilled interiors are hit-testable
-        if (m_tag_id != TAG_NONE)
+        if (!m_tag_id.is_none())
         {
             frame.tag_area(area, m_tag_id);
         }
@@ -318,7 +318,7 @@ namespace koto
                 1
             };
             Text(m_title).bg(m_title_bg).fg(t_fg).draw(frame, textArea);
-            if (m_tag_id != TAG_NONE)
+            if (!m_tag_id.is_none())
             {
                 frame.tag_area(textArea, m_tag_id);
             }
