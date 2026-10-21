@@ -959,6 +959,131 @@ void test_universal_id_and_focus_manager()
     std::cout << "PASSED\n";
 }
 
+void test_spatial_navigation_and_modal_isolation()
+{
+    std::cout << "[Test 19] Spatial 2D navigation (auto-harvested bounds) & Modal focus trapping... " << std::flush;
+
+    // 1. Spatial 2D Navigation on a 3x3 Grid
+    {
+        Frame frame(15, 30);
+        FocusManager fm;
+
+        // Register 9 cells (pure logical IDs, zero coordinates passed!)
+        for (size_t r = 0; r < 3; ++r)
+        {
+            for (size_t c = 0; c < 3; ++c)
+            {
+                fm.add(Id("cell", r, c));
+            }
+        }
+
+        // Render pass: Area is dynamically calculated here!
+        auto grid = Layout::grid_uniform(frame.area(), 3, 3);
+        grid.for_each([&](size_t r, size_t c, const Area& cell_area) {
+            Box().id(Id("cell", r, c)).draw(frame, cell_area);
+        });
+
+        // Frame auto-harvested all 9 bounding boxes!
+        assert(frame.bounds_of(Id("cell", 0, 0)).has_value());
+        assert(frame.bounds_of(Id("cell", 2, 2)).has_value());
+
+        // Sync geometry from frame into focus manager
+        fm.sync_geometry(frame);
+
+        // Initially at (0, 0)
+        assert(fm.is_focused(Id("cell", 0, 0)));
+
+        // Move Right -> (0, 1)
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Right)});
+        assert(fm.is_focused(Id("cell", 0, 1)));
+
+        // Move Right -> (0, 2)
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Right)});
+        assert(fm.is_focused(Id("cell", 0, 2)));
+
+        // Move Right at right edge -> clamped (stays at 0, 2)
+        bool clamped_right = fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Right)});
+        assert(!clamped_right);
+        assert(fm.is_focused(Id("cell", 0, 2)));
+
+        // Move Down -> (1, 2)
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Down)});
+        assert(fm.is_focused(Id("cell", 1, 2)));
+
+        // Move Left -> (1, 1) [Center cell]
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Left)});
+        assert(fm.is_focused(Id("cell", 1, 1)));
+
+        // Move Up -> (0, 1)
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Up)});
+        assert(fm.is_focused(Id("cell", 0, 1)));
+    }
+
+    // 2. Modal Focus Trapping & Background Shielding
+    {
+        Frame frame(20, 40);
+        FocusManager fm;
+
+        // Background UI: 2 panels
+        fm.add("sidebar");
+        fm.add("main_editor");
+
+        Box().id("sidebar").draw(frame, Area(0, 0, 10, 20));
+        Box().id("main_editor").draw(frame, Area(0, 10, 30, 20));
+        fm.sync_geometry(frame);
+
+        // Move to main_editor
+        fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Right)});
+        assert(fm.is_focused("main_editor"));
+
+        // Open Modal Dialog
+        {
+            auto modal = fm.modal_scope("dialog");
+
+            fm.add("btn_cancel");
+            fm.add("btn_confirm");
+
+            // In modal dialog, cancel is on left, confirm is on right
+            Box().id(fm.id("btn_cancel")).draw(frame, Area(10, 12, 8, 3));
+            Box().id(fm.id("btn_confirm")).draw(frame, Area(10, 22, 8, 3));
+            fm.sync_geometry(frame);
+
+            // Focus automatically transferred to first modal button!
+            assert(fm.is_focused("btn_cancel"));
+
+            // Right arrow moves to btn_confirm
+            fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Right)});
+            assert(fm.is_focused("btn_confirm"));
+
+            // Right arrow cannot escape modal to background editor!
+            bool escaped_right = fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Right)});
+            assert(!escaped_right);
+            assert(fm.is_focused("btn_confirm"));
+
+            // Up arrow cannot escape modal to background editor!
+            bool escaped_up = fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Up)});
+            assert(!escaped_up);
+            assert(fm.is_focused("btn_confirm"));
+
+            // Tab within modal wraps to btn_cancel, NOT background!
+            fm.handle_key(KeyEvent{static_cast<uint32_t>(Key::Tab)});
+            assert(fm.is_focused("btn_cancel"));
+
+            // Mouse click on background sidebar at (2, 2) is shielded!
+            bool click_handled = fm.handle_mouse_click(2, 2, frame);
+            assert(click_handled); // Click absorbed!
+            assert(fm.is_focused("btn_cancel")); // Still on modal!
+            assert(!fm.is_focused("sidebar")); // Sidebar does NOT get focus!
+        }
+        // Modal scope ended (destructor ran and popped modal)
+
+        // Focus automatically restored to main_editor!
+        assert(fm.is_focused("main_editor"));
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -983,9 +1108,10 @@ int main()
     test_zero_overhead_modernizations();
     test_hit_buffer_and_box_focus();
     test_universal_id_and_focus_manager();
+    test_spatial_navigation_and_modal_isolation();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 18 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 19 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

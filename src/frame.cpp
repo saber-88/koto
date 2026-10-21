@@ -111,6 +111,18 @@ namespace koto
                 this->set_cell(r, col, c, tag_id);
             }
         }
+        if (!tag_id.is_none())
+        {
+            auto it = m_tag_bounds.find(tag_id.value());
+            if (it == m_tag_bounds.end())
+            {
+                m_tag_bounds[tag_id.value()] = area;
+            }
+            else
+            {
+                it->second = it->second.union_with(area);
+            }
+        }
     }
 
     auto Frame::fill(Area area, char32_t ch, uint32_t fg, uint32_t bg, Id tag_id) -> void
@@ -130,6 +142,7 @@ namespace koto
 
         std::fill(m_back_buffer.begin(), m_back_buffer.end(), Cell{});
         std::fill(m_hit_buffer.begin(), m_hit_buffer.end(), TAG_NONE);
+        m_tag_bounds.clear();
         m_cursor_visible = false;
         m_cursor_row = -1;
         m_cursor_col = -1;
@@ -284,12 +297,26 @@ namespace koto
         m_front_buffer.assign(total, def);
         m_back_buffer.assign(total, def);
         m_hit_buffer.assign(total, TAG_NONE);
+        m_tag_bounds.clear();
     }
 
     auto Frame::tag_cell(int row, int col, Id tag_id) -> void
     {
         if (row < 0 || row >= m_rows || col < 0 || col >= m_cols) return;
         m_hit_buffer[static_cast<size_t>(row * m_cols + col)] = static_cast<int>(tag_id.value());
+        if (!tag_id.is_none())
+        {
+            Area cell_area{row, col, 1, 1};
+            auto it = m_tag_bounds.find(tag_id.value());
+            if (it == m_tag_bounds.end())
+            {
+                m_tag_bounds[tag_id.value()] = cell_area;
+            }
+            else
+            {
+                it->second = it->second.union_with(cell_area);
+            }
+        }
     }
 
     auto Frame::tag_area(Area area, Id tag_id) -> void
@@ -304,6 +331,18 @@ namespace koto
                 m_hit_buffer[static_cast<size_t>(r * m_cols + c)] = static_cast<int>(tag_id.value());
             }
         }
+        if (!tag_id.is_none())
+        {
+            auto it = m_tag_bounds.find(tag_id.value());
+            if (it == m_tag_bounds.end())
+            {
+                m_tag_bounds[tag_id.value()] = area;
+            }
+            else
+            {
+                it->second = it->second.union_with(area);
+            }
+        }
     }
 
     auto Frame::hit_at(int row, int col) const -> Id
@@ -315,6 +354,23 @@ namespace koto
     auto Frame::clear_hit_buffer(Id default_tag) -> void
     {
         std::fill(m_hit_buffer.begin(), m_hit_buffer.end(), static_cast<int>(default_tag.value()));
+        m_tag_bounds.clear();
+    }
+
+    auto Frame::bounds_of(Id tag_id) const -> std::optional<Area>
+    {
+        if (tag_id.is_none()) return std::nullopt;
+        auto it = m_tag_bounds.find(tag_id.value());
+        if (it != m_tag_bounds.end())
+        {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    auto Frame::all_tag_bounds() const -> const std::unordered_map<uint32_t, Area>&
+    {
+        return m_tag_bounds;
     }
 
     auto Frame::to_plain_text_row(int r) const -> std::string

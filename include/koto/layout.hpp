@@ -1,14 +1,16 @@
 #pragma once
 
+#include <algorithm>
 #include <vector>
 
 namespace koto
 {
     struct Area
     {
-        int row, col;
-        int width ,height;
+        int row = 0, col = 0;
+        int width = 0, height = 0;
 
+        Area() = default;
         Area(int r, int c, int w, int h)
         : row(r),col(c),width(w),height(h)
         {}
@@ -32,6 +34,32 @@ namespace koto
         auto is_valid() const -> bool
         {
             return width > 0 && height > 0;
+        }
+
+        auto contains(int r, int c) const -> bool
+        {
+            return r >= row && r < bottom() && c >= col && c < right();
+        }
+
+        auto center_row() const -> int
+        {
+            return row + height / 2;
+        }
+
+        auto center_col() const -> int
+        {
+            return col + width / 2;
+        }
+
+        auto union_with(Area other) const -> Area
+        {
+            if (!is_valid()) return other;
+            if (!other.is_valid()) return *this;
+            int min_r = std::min(row, other.row);
+            int min_c = std::min(col, other.col);
+            int max_r = std::max(bottom(), other.bottom());
+            int max_c = std::max(right(), other.right());
+            return {min_r, min_c, max_c - min_c, max_r - min_r};
         }
 
         bool operator==(const Area&) const = default;

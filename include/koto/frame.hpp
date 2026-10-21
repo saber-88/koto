@@ -4,7 +4,9 @@
 #include "koto/id.hpp"
 #include "koto/layout.hpp"
 #include "koto/terminal.hpp"
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace koto
@@ -30,11 +32,13 @@ namespace koto
             auto set_cursor(int row, int col) -> void;
             auto area() const -> Area;
 
-            // Spatial Tag / Hit-Buffer API
+            // Spatial Tag / Hit-Buffer & Geometry API
             auto tag_cell(int row, int col, Id tag_id) -> void;
             auto tag_area(Area area, Id tag_id) -> void;
             auto hit_at(int row, int col) const -> Id;
             auto clear_hit_buffer(Id default_tag = Id::none()) -> void;
+            auto bounds_of(Id tag_id) const -> std::optional<Area>;
+            auto all_tag_bounds() const -> const std::unordered_map<uint32_t, Area>&;
 
             // Snapshot testing & inspection
             auto to_plain_text() const -> std::string;
@@ -50,6 +54,7 @@ namespace koto
             std::vector<Cell> m_front_buffer;
             std::vector<Cell> m_back_buffer;
             std::vector<int> m_hit_buffer;
+            std::unordered_map<uint32_t, Area> m_tag_bounds;
             std::string m_output;              // output buffer for batched write
             uint32_t m_cur_fg = COLOR_DEFAULT;  // tracked SGR fg
             uint32_t m_cur_bg = COLOR_DEFAULT;  // tracked SGR bg

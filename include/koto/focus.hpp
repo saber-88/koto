@@ -33,17 +33,31 @@ namespace koto
     // Forward declaration of FocusManager for IdScope
     class FocusManager;
 
+    enum class Direction : uint8_t
+    {
+        Up,
+        Down,
+        Left,
+        Right
+    };
+
+    enum class ScopeMode : uint8_t
+    {
+        Normal,
+        Modal
+    };
+
     // =========================================================================
     // RAII Scope Guard: IdScope
     //
     // CONCEPT: RAII (Resource Acquisition Is Initialization)
     // Automatically pops the scope when exiting a block { ... }.
-    // Prevents ID collision when rendering nested/reusable components.
+    // Supports both Normal namespacing and Modal focus trapping!
     // =========================================================================
     class IdScope
     {
     public:
-        IdScope(FocusManager& fm, Id scope_id);
+        IdScope(FocusManager& fm, Id scope_id, ScopeMode mode = ScopeMode::Normal);
         ~IdScope();
 
         // Non-copyable, movable
@@ -66,6 +80,8 @@ namespace koto
     struct FocusTarget
     {
         Id id;
+        Area bounds = Area{0, 0, 0, 0};
+        Id modal_scope = Id::none();
         std::function<void(bool)> set_focus;              // updates .focused on the underlying state
         std::function<bool(const KeyEvent&)> handle_key;  // routes key event to the underlying state
         std::function<void()> on_focus;                   // optional user hook when focus gained
@@ -87,26 +103,19 @@ namespace koto
         {
             Id id = custom_id.is_none() ? Id(&state) : custom_id;
             Id scoped = this->scoped_id(id);
+            Id current_modal = this->active_modal_scope();
 
             FocusTarget target{
                 .id = scoped,
+                .bounds = Area{0, 0, 0, 0},
+                .modal_scope = current_modal,
                 .set_focus = [&state](bool f) { state.focused = f; },
                 .handle_key = [&state](const KeyEvent& k) { return state.handle_event(k); },
                 .on_focus = nullptr,
                 .on_blur = nullptr
             };
 
-            // Initial focus to first registered element
-            if (m_targets.empty())
-            {
-                target.set_focus(true);
-            }
-            else
-            {
-                target.set_focus(false);
-            }
-
-            m_targets.push_back(std::move(target));
+            this->register_target(std::move(target));
             return *this;
         }
 
@@ -126,6 +135,14 @@ namespace koto
             return focus_id(Id(&state));
         }
 
+        // Spatial 2D Navigation API (Auto-harvested from Frame bounds!)
+        void sync_geometry(const Frame& frame);
+        bool move(Direction dir);
+        bool move_up() { return move(Direction::Up); }
+        bool move_down() { return move(Direction::Down); }
+        bool move_left() { return move(Direction::Left); }
+        bool move_right() { return move(Direction::Right); }
+
         // Query
         bool is_focused(Id id) const;              // Check if Id is active
 
@@ -144,23 +161,37 @@ namespace koto
 
         // Event Handling
         // Automatically handles Tab / BackTab to cycle focus.
-        // Forwards other keys to the active focus target.
+        // Intercepts Arrow keys for 2D spatial movement across boxes.
+        // Forwards keys to the active focus target.
         // Returns true if consumed, false if unhandled (passes to global hotkeys).
         bool handle_key(const KeyEvent& key);
 
         // Mouse click integration: queries Frame hit-buffer at (row, col)
         // If a valid tagged widget was clicked, shifts focus to it and returns true.
+        // If inside a modal scope, clicks outside the modal are absorbed & shielded.
         bool handle_mouse_click(int row, int col, const Frame& frame);
 
         // RAII Scoping
         IdScope scope(Id scope_id);
-        void push_scope(Id scope_id);
+        IdScope modal_scope(Id scope_id);
+        void push_scope(Id scope_id, ScopeMode mode = ScopeMode::Normal);
         void pop_scope();
         Id scoped_id(Id base_id) const;
+        Id id(Id base_id) const { return scoped_id(base_id); }
+        Id active_modal_scope() const;
 
     private:
+        struct ScopeEntry
+        {
+            uint32_t id = 0;
+            ScopeMode mode = ScopeMode::Normal;
+        };
+
         std::vector<FocusTarget> m_targets;
         size_t m_active_index = 0;
-        std::vector<uint32_t> m_scope_stack;
+        std::vector<ScopeEntry> m_scope_stack;
+        std::vector<size_t> m_saved_focus_stack;
+
+        void register_target(FocusTarget target);
     };
 }

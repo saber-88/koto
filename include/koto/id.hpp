@@ -67,6 +67,10 @@ namespace koto
         constexpr Id(std::string_view str, size_t index) noexcept
             : m_value(fnv1a_32(static_cast<uint64_t>(index), fnv1a_32(str))) {}
 
+        // 2D Matrix / Grid ID: combines a string name with row and column (e.g. Id("cell", r, c))
+        constexpr Id(std::string_view str, size_t row, size_t col) noexcept
+            : m_value(fnv1a_32(static_cast<uint64_t>(col), fnv1a_32(static_cast<uint64_t>(row), fnv1a_32(str)))) {}
+
         // Construct from any object pointer (hashes memory address, collision-proof)
         Id(const void* ptr) noexcept
             : m_value(fnv1a_32(reinterpret_cast<uintptr_t>(ptr))) {}
