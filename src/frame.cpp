@@ -208,7 +208,7 @@ namespace koto
         m_output.append(encoded.view());
     }
 
-    auto Frame::render() -> void
+    auto Frame::render(bool flush) -> void
     {
         m_output.clear();
         // reserve a reasonable amount to avoid repeated realloc
@@ -273,8 +273,8 @@ namespace koto
         // DEC Mode 2026: End Synchronized Update (atomic render flush)
         m_output.append("\033[?2026l");
 
-        // flush entire frame in one write if attached to a terminal
-        if (m_term != nullptr && !m_output.empty())
+        // flush entire frame in one write if attached to a terminal and flush requested
+        if (flush && m_term != nullptr && !m_output.empty())
         {
             write(STDOUT_FILENO, m_output.data(), m_output.size());
             fflush(stdout);

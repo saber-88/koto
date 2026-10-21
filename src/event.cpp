@@ -29,6 +29,77 @@ namespace koto
         }
     }
 
+    static std::optional<MouseEvent> parse_sgr_mouse(std::string_view sv)
+    {
+        // Must start with "\033[<" and end with 'M' or 'm'
+        if (sv.size() < 6 || sv[0] != '\033' || sv[1] != '[' || sv[2] != '<')
+        {
+            return std::nullopt;
+        }
+        char term = sv.back();
+        if (term != 'M' && term != 'm')
+        {
+            return std::nullopt;
+        }
+
+        size_t i = 3;
+        int btn = 0;
+        while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9')
+        {
+            btn = btn * 10 + (sv[i] - '0');
+            i++;
+        }
+        if (i >= sv.size() || sv[i] != ';') return std::nullopt;
+        i++;
+
+        int col = 0;
+        while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9')
+        {
+            col = col * 10 + (sv[i] - '0');
+            i++;
+        }
+        if (i >= sv.size() || sv[i] != ';') return std::nullopt;
+        i++;
+
+        int row = 0;
+        while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9')
+        {
+            row = row * 10 + (sv[i] - '0');
+            i++;
+        }
+
+        MouseButton button = MouseButton::None;
+        if (btn == 64) button = MouseButton::WheelUp;
+        else if (btn == 65) button = MouseButton::WheelDown;
+        else
+        {
+            int raw_btn = btn & 3;
+            if (raw_btn == 0) button = MouseButton::Left;
+            else if (raw_btn == 1) button = MouseButton::Middle;
+            else if (raw_btn == 2) button = MouseButton::Right;
+        }
+
+        MouseAction action = (term == 'm') ? MouseAction::Release : MouseAction::Press;
+        if ((btn & 32) != 0 && term == 'M')
+        {
+            action = MouseAction::Move;
+        }
+
+        bool shift = (btn & 4) != 0;
+        bool alt = (btn & 8) != 0;
+        bool ctrl = (btn & 16) != 0;
+
+        return MouseEvent{
+            .row = std::max(0, row - 1),
+            .col = std::max(0, col - 1),
+            .button = button,
+            .action = action,
+            .shift = shift,
+            .alt = alt,
+            .ctrl = ctrl
+        };
+    }
+
     static std::optional<KeyEvent> parse_csi(std::string_view sv)
     {
         // Must start with "\033[" and have at least 3 characters
@@ -316,6 +387,29 @@ namespace koto
             // CSI sequence: "\033[" ... [0x40 - 0x7e]
             if (in[1] == '[')
             {
+                // SGR mouse sequence: "\033[<" ... ['M' or 'm']
+                if (in.size() >= 3 && in[2] == '<')
+                {
+                    size_t i = 3;
+                    while (i < in.size() && in[i] != 'M' && in[i] != 'm')
+                    {
+                        i++;
+                    }
+                    if (i < in.size())
+                    {
+                        size_t mouse_len = i + 1;
+                        std::string_view mouse_str = in.substr(0, mouse_len);
+                        in.remove_prefix(mouse_len);
+                        if (auto me = parse_sgr_mouse(mouse_str))
+                        {
+                            return *me;
+                        }
+                        return TickEvent{};
+                    }
+                    // Incomplete mouse sequence in buffer
+                    return TickEvent{};
+                }
+
                 size_t i = 2;
                 while (i < in.size() &&
                        (static_cast<unsigned char>(in[i]) < 0x40 ||

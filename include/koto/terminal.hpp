@@ -28,6 +28,8 @@ namespace koto
             auto disable_bracketed_paste() const -> void;
             auto enable_kitty_keyboard() const -> void;
             auto disable_kitty_keyboard() const -> void;
+            auto enable_mouse_capture() const -> void;
+            auto disable_mouse_capture() const -> void;
             
         private:
         

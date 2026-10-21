@@ -80,7 +80,35 @@ namespace koto
         std::string text;
     };
 
-    struct Event : std::variant<KeyEvent, ResizeEvent, TickEvent, PasteEvent>
+    enum class MouseButton : uint8_t
+    {
+        Left = 0,
+        Middle = 1,
+        Right = 2,
+        WheelUp = 64,
+        WheelDown = 65,
+        None = 255
+    };
+
+    enum class MouseAction : uint8_t
+    {
+        Press,
+        Release,
+        Move
+    };
+
+    struct MouseEvent
+    {
+        int row = 0; // 0-based row
+        int col = 0; // 0-based col
+        MouseButton button = MouseButton::Left;
+        MouseAction action = MouseAction::Press;
+        bool shift = false;
+        bool alt = false;
+        bool ctrl = false;
+    };
+
+    struct Event : std::variant<KeyEvent, ResizeEvent, TickEvent, PasteEvent, MouseEvent>
     {
         using variant::variant;
 
@@ -88,14 +116,17 @@ namespace koto
         bool is_resize() const { return std::holds_alternative<ResizeEvent>(*this); }
         bool is_tick() const { return std::holds_alternative<TickEvent>(*this); }
         bool is_paste() const { return std::holds_alternative<PasteEvent>(*this); }
+        bool is_mouse() const { return std::holds_alternative<MouseEvent>(*this); }
 
         const KeyEvent* as_key() const { return std::get_if<KeyEvent>(this); }
         const ResizeEvent* as_resize() const { return std::get_if<ResizeEvent>(this); }
         const PasteEvent* as_paste() const { return std::get_if<PasteEvent>(this); }
+        const MouseEvent* as_mouse() const { return std::get_if<MouseEvent>(this); }
 
         const KeyEvent& key() const { return std::get<KeyEvent>(*this); }
         const ResizeEvent& resize() const { return std::get<ResizeEvent>(*this); }
         const PasteEvent& paste() const { return std::get<PasteEvent>(*this); }
+        const MouseEvent& mouse() const { return std::get<MouseEvent>(*this); }
     };
 
 

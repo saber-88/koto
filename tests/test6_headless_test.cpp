@@ -1084,6 +1084,126 @@ void test_spatial_navigation_and_modal_isolation()
     std::cout << "PASSED\n";
 }
 
+void test_app_use_focus_and_mouse()
+{
+    std::cout << "[Test 20] App::use_focus(fm) integration & SGR mouse parser... " << std::flush;
+
+    // 1. SGR Mouse Escape Sequence Parser
+    {
+        // Left click press at col 15, row 5 (1-based -> 0-based col 14, row 4)
+        Event ev1 = EventLoop::parse("\033[<0;15;5M");
+        assert(ev1.is_mouse());
+        const auto* m1 = ev1.as_mouse();
+        assert(m1 != nullptr);
+        assert(m1->col == 14);
+        assert(m1->row == 4);
+        assert(m1->button == MouseButton::Left);
+        assert(m1->action == MouseAction::Press);
+        assert(!m1->shift && !m1->alt && !m1->ctrl);
+
+        // Left click release at col 15, row 5
+        Event ev2 = EventLoop::parse("\033[<0;15;5m");
+        assert(ev2.is_mouse());
+        const auto* m2 = ev2.as_mouse();
+        assert(m2 != nullptr);
+        assert(m2->col == 14);
+        assert(m2->row == 4);
+        assert(m2->action == MouseAction::Release);
+
+        // Wheel up at col 20, row 8
+        Event ev3 = EventLoop::parse("\033[<64;20;8M");
+        assert(ev3.is_mouse());
+        const auto* m3 = ev3.as_mouse();
+        assert(m3 != nullptr);
+        assert(m3->button == MouseButton::WheelUp);
+        assert(m3->col == 19 && m3->row == 7);
+
+        // Shift + Left Click at col 10, row 3
+        Event ev4 = EventLoop::parse("\033[<4;10;3M");
+        assert(ev4.is_mouse());
+        const auto* m4 = ev4.as_mouse();
+        assert(m4 != nullptr);
+        assert(m4->button == MouseButton::Left);
+        assert(m4->shift == true);
+    }
+
+    // 2. Full App::use_focus(fm) Lifecycle & Event Routing
+    {
+        App app;
+        FocusManager fm;
+
+        TextInputState user_in("Alice");
+        TextInputState pass_in("");
+        bool submit_clicked = false;
+
+        fm.add(user_in).add(pass_in);
+        fm.add("submit_btn", [&](const KeyEvent& k) {
+            if (k.is(Key::Enter))
+            {
+                submit_clicked = true;
+                return true;
+            }
+            return false;
+        });
+
+        // Plug focus manager into app
+        app.use_focus(fm);
+
+        // Setup UI layout
+        app.on_render([&](Frame& frame) {
+            Box().id(fm.id(user_in)).draw(frame, Area(0, 0, 20, 3));
+            Box().id(fm.id(pass_in)).draw(frame, Area(4, 0, 20, 3));
+            Box().id(fm.id("submit_btn")).draw(frame, Area(8, 0, 20, 3));
+        });
+
+        // Trigger render & geometry harvest (silent without flushing to terminal in test)
+        app.draw_frame(/*flush=*/false);
+
+        // 1. Initial state: user_in is focused
+        assert(fm.is_focused(user_in));
+        assert(!fm.is_focused(pass_in));
+
+        // 2. Dispatch Tab key event through app
+        app.dispatch_event(Event{KeyEvent{static_cast<uint32_t>(Key::Tab)}});
+        assert(fm.is_focused(pass_in));
+        assert(!fm.is_focused(user_in));
+
+        // 3. Dispatch typing into pass_in
+        app.dispatch_event(Event{KeyEvent{'P', false, true, false, false}});
+        assert(pass_in.text() == "P");
+        assert(user_in.text() == "Alice");
+
+        // 4. Dispatch Mouse Click onto "submit_btn" Area (row 8..11, col 0..20)
+        // Click at row 9, col 5
+        app.dispatch_event(Event{MouseEvent{
+            .row = 9,
+            .col = 5,
+            .button = MouseButton::Left,
+            .action = MouseAction::Press,
+            .shift = false,
+            .alt = false,
+            .ctrl = false
+        }});
+        assert(fm.is_focused("submit_btn"));
+        assert(!fm.is_focused(pass_in));
+
+        // 5. Press Enter on focused submit_btn -> triggers custom callback
+        app.dispatch_event(Event{KeyEvent{static_cast<uint32_t>(Key::Enter)}});
+        assert(submit_clicked);
+
+        // 6. Unconsumed key bubbles to app.on_key
+        bool quit_received = false;
+        app.on_key([&](const KeyEvent& k) {
+            if (k.ch == 'q') quit_received = true;
+        });
+        // 'q' is not consumed by submit_btn -> bubbles to app.on_key!
+        app.dispatch_event(Event{KeyEvent{'q'}});
+        assert(quit_received);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -1109,9 +1229,10 @@ int main()
     test_hit_buffer_and_box_focus();
     test_universal_id_and_focus_manager();
     test_spatial_navigation_and_modal_isolation();
+    test_app_use_focus_and_mouse();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 19 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 20 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

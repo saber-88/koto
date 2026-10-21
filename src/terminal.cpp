@@ -22,6 +22,7 @@ namespace koto
 
     auto Terminal::restore_terminal() -> void
     {
+        disable_mouse_capture();
         disable_kitty_keyboard();
         disable_bracketed_paste();
         tcsetattr(STDIN_FILENO, TCSANOW, &og_terminal);
@@ -104,6 +105,21 @@ namespace koto
     {
         // Pop Kitty keyboard flags
         static_cast<void>(write(STDOUT_FILENO, "\033[<u", 4));
+        std::fflush(stdout);
+    }
+
+    auto Terminal::enable_mouse_capture() const -> void
+    {
+        // 1000h: standard click reporting
+        // 1002h: button event reporting (drag)
+        // 1006h: SGR extended mode
+        static_cast<void>(write(STDOUT_FILENO, "\033[?1000h\033[?1002h\033[?1006h", 24));
+        std::fflush(stdout);
+    }
+
+    auto Terminal::disable_mouse_capture() const -> void
+    {
+        static_cast<void>(write(STDOUT_FILENO, "\033[?1006l\033[?1002l\033[?1000l", 24));
         std::fflush(stdout);
     }
 

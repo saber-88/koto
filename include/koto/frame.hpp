@@ -28,7 +28,7 @@ namespace koto
             auto fill(Area area, Cell c, Id tag_id = Id::none()) -> void;
             auto fill(Area area, char32_t ch, uint32_t fg = COLOR_DEFAULT, uint32_t bg = COLOR_DEFAULT, Id tag_id = Id::none()) -> void;
             auto clear_back_buffer() -> void;
-            auto render() -> void;
+            auto render(bool flush = true) -> void;
             auto set_cursor(int row, int col) -> void;
             auto area() const -> Area;
 

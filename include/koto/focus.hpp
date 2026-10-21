@@ -178,6 +178,14 @@ namespace koto
         void pop_scope();
         Id scoped_id(Id base_id) const;
         Id id(Id base_id) const { return scoped_id(base_id); }
+
+        template<typename T>
+        requires FocusableState<std::remove_cvref_t<T>>
+        Id id(const T& state) const
+        {
+            return scoped_id(Id(&state));
+        }
+
         Id active_modal_scope() const;
 
     private:
