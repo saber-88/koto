@@ -4,7 +4,6 @@
 #include "koto/layout.hpp"
 #include "koto/text.hpp"
 #include "koto/utf8.hpp"
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -86,15 +85,60 @@ namespace koto
         return *this;
     }
 
+    Box& Box::focused(bool is_focused)
+    {
+        m_focused = is_focused;
+        return *this;
+    }
+
+    Box& Box::focused_border_fg(std::string_view fg)
+    {
+        m_focused_border_fg = parse_color(fg);
+        return *this;
+    }
+
+    Box& Box::focused_border_fg(uint32_t fg)
+    {
+        m_focused_border_fg = fg;
+        return *this;
+    }
+
+    Box& Box::focused_border_style(BorderStyle style)
+    {
+        m_focused_border_style = style;
+        m_has_focused_border_style = true;
+        return *this;
+    }
+
+    Box& Box::id(int tag_id)
+    {
+        m_tag_id = tag_id;
+        return *this;
+    }
+
+    Box& Box::tag(int tag_id)
+    {
+        m_tag_id = tag_id;
+        return *this;
+    }
 
     void Box::draw(Frame& frame, Area area)
     {
         if(!area.is_valid()) return;
 
+        // Tag entire area if an ID is set so even unfilled interiors are hit-testable
+        if (m_tag_id != TAG_NONE)
+        {
+            frame.tag_area(area, m_tag_id);
+        }
+
         int row = area.row;
         int col = area.col;
         int right = area.right();
         int bottom = area.bottom();
+
+        uint32_t border_color = m_focused ? m_focused_border_fg : m_fg;
+        BorderStyle effective_style = (m_focused && m_has_focused_border_style) ? m_focused_border_style : m_style;
 
         char32_t top_left;
         char32_t top_right;
@@ -103,8 +147,7 @@ namespace koto
         char32_t horizontal;
         char32_t vertical;
 
-
-        switch (m_style)
+        switch (effective_style)
         {
             case BorderStyle::None:
             {
@@ -174,37 +217,34 @@ namespace koto
                 if (on_top && on_left)
                 {
                     if (!m_borders.left) {
-                        frame.set_cell(r, c, {horizontal,m_fg,m_bg});
+                        frame.set_cell(r, c, {horizontal, border_color, m_bg}, m_tag_id);
                         continue;
                     }
-                    frame.set_cell(r, c, {top_left,m_fg,m_bg});
+                    frame.set_cell(r, c, {top_left, border_color, m_bg}, m_tag_id);
                 }
                 else if (on_top && on_right)
                 {
                     if (!m_borders.right) {
-                        frame.set_cell(r, c, {horizontal,m_fg,m_bg});
+                        frame.set_cell(r, c, {horizontal, border_color, m_bg}, m_tag_id);
                         continue;
                     }
-                    frame.set_cell(r, c, {top_right,m_fg,m_bg});
-                    
+                    frame.set_cell(r, c, {top_right, border_color, m_bg}, m_tag_id);
                 }
                 else if (on_bottom && on_left)
                 {
                     if (!m_borders.left) {
-                        frame.set_cell(r, c, {horizontal,m_fg,m_bg});
+                        frame.set_cell(r, c, {horizontal, border_color, m_bg}, m_tag_id);
                         continue;
                     }
-                    frame.set_cell(r, c, {bottom_left,m_fg,m_bg});
-                    
+                    frame.set_cell(r, c, {bottom_left, border_color, m_bg}, m_tag_id);
                 }
                 else if (on_bottom && on_right)
                 {
                     if (!m_borders.right) {
-                        frame.set_cell(r, c, {horizontal,m_fg,m_bg});
+                        frame.set_cell(r, c, {horizontal, border_color, m_bg}, m_tag_id);
                         continue;
                     }
-                    frame.set_cell(r, c, {bottom_right,m_fg,m_bg});
-                    
+                    frame.set_cell(r, c, {bottom_right, border_color, m_bg}, m_tag_id);
                 }
                 else if 
                 (
@@ -213,8 +253,7 @@ namespace koto
                     m_borders.top
                 )
                 {
-                    frame.set_cell(r, c, {horizontal,m_fg,m_bg});
-                    
+                    frame.set_cell(r, c, {horizontal, border_color, m_bg}, m_tag_id);
                 }
                 else if 
                 (
@@ -223,8 +262,7 @@ namespace koto
                     m_borders.bottom
                 )
                 {
-                    frame.set_cell(r, c, {horizontal,m_fg,m_bg});
-                    
+                    frame.set_cell(r, c, {horizontal, border_color, m_bg}, m_tag_id);
                 }
                 else if 
                 (
@@ -233,8 +271,7 @@ namespace koto
                     m_borders.left
                 )
                 {
-                    frame.set_cell(r, c, {vertical,m_fg,m_bg});
-                    
+                    frame.set_cell(r, c, {vertical, border_color, m_bg}, m_tag_id);
                 }
                 else if 
                 (
@@ -243,13 +280,11 @@ namespace koto
                     m_borders.right
                 )
                 {
-                    frame.set_cell(r, c, {vertical,m_fg,m_bg});
-                    
+                    frame.set_cell(r, c, {vertical, border_color, m_bg}, m_tag_id);
                 }
                 else {
                     if(m_filled){
-                        
-                        frame.set_cell(r, c, {U' ',m_fg,m_bg});
+                        frame.set_cell(r, c, {U' ', m_fg, m_bg}, m_tag_id);
                     }
                 }
 
@@ -269,15 +304,25 @@ namespace koto
                 title_col = area.right() - title_width - 2;
             }
 
-            frame.set_cell(row, title_col - 1, {U' ', m_title_fg, m_title_bg});
+            uint32_t t_fg = m_title_fg;
+            if (m_focused && m_title_fg == COLOR_DEFAULT)
+            {
+                t_fg = border_color;
+            }
+
+            frame.set_cell(row, title_col - 1, {U' ', t_fg, m_title_bg}, m_tag_id);
             Area textArea = {
                 row,
                 title_col,
                 title_width,
                 1
             };
-            Text(m_title).bg(m_title_bg).fg(m_title_fg).draw(frame, textArea);
-            frame.set_cell(row, title_col + title_width, {U' ', m_title_fg, m_title_bg});
+            Text(m_title).bg(m_title_bg).fg(t_fg).draw(frame, textArea);
+            if (m_tag_id != TAG_NONE)
+            {
+                frame.tag_area(textArea, m_tag_id);
+            }
+            frame.set_cell(row, title_col + title_width, {U' ', t_fg, m_title_bg}, m_tag_id);
         }
 
     }

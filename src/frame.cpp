@@ -20,7 +20,8 @@ namespace koto
     m_rows(m_term->get_rows()),
     m_cols(m_term->get_cols()), 
     m_front_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
-    m_back_buffer(static_cast<size_t>(m_cols * m_rows), Cell{})
+    m_back_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
+    m_hit_buffer(static_cast<size_t>(m_cols * m_rows), TAG_NONE)
     {}
 
     Frame::Frame(int rows, int cols):
@@ -28,7 +29,8 @@ namespace koto
     m_rows(rows < 0 ? 0 : rows),
     m_cols(cols < 0 ? 0 : cols),
     m_front_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
-    m_back_buffer(static_cast<size_t>(m_cols * m_rows), Cell{})
+    m_back_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
+    m_hit_buffer(static_cast<size_t>(m_cols * m_rows), TAG_NONE)
     {}
 
     auto Frame::get_cell(int row, int col) const -> Cell
@@ -61,7 +63,7 @@ namespace koto
         return m_back_buffer[static_cast<size_t>(row * m_cols + col)];
     }
     
-    auto Frame::set_cell(int row, int col, Cell c) -> void
+    auto Frame::set_cell(int row, int col, Cell c, int tag_id) -> void
     {
         if (row >= m_rows || col >= m_cols || row < 0 || col < 0) return;
 
@@ -87,25 +89,33 @@ namespace koto
         if (w == 2)
         {
             m_back_buffer[idx + 1] = Cell{.continuation = true};
+            if (tag_id != TAG_NONE)
+            {
+                m_hit_buffer[idx + 1] = tag_id;
+            }
         }
         m_back_buffer[idx] = c;
+        if (tag_id != TAG_NONE)
+        {
+            m_hit_buffer[idx] = tag_id;
+        }
     }
 
-    auto Frame::fill(Area area, Cell c) -> void
+    auto Frame::fill(Area area, Cell c, int tag_id) -> void
     {
         if (!area.is_valid()) return;
         for (int r = area.row; r < area.bottom(); ++r)
         {
             for (int col = area.col; col < area.right(); ++col)
             {
-                this->set_cell(r, col, c);
+                this->set_cell(r, col, c, tag_id);
             }
         }
     }
 
-    auto Frame::fill(Area area, char32_t ch, uint32_t fg, uint32_t bg) -> void
+    auto Frame::fill(Area area, char32_t ch, uint32_t fg, uint32_t bg, int tag_id) -> void
     {
-        this->fill(area, Cell{ch, fg, bg, 1, false});
+        this->fill(area, Cell{ch, fg, bg, 1, false}, tag_id);
     }
 
     auto Frame::set_cursor(int row, int col) -> void
@@ -119,6 +129,7 @@ namespace koto
     {
 
         std::fill(m_back_buffer.begin(), m_back_buffer.end(), Cell{});
+        std::fill(m_hit_buffer.begin(), m_hit_buffer.end(), TAG_NONE);
         m_cursor_visible = false;
         m_cursor_row = -1;
         m_cursor_col = -1;
@@ -266,11 +277,44 @@ namespace koto
     {
         m_rows = (rows < 0) ? 0 : rows ;
         m_cols = (cols < 0) ? 0 : cols;
+        size_t total = static_cast<size_t>(m_rows * m_cols);
         Cell def;
         def.ch = U'\xFF';
         def.continuation = false;
-        m_front_buffer.assign(static_cast<size_t>(m_rows * m_cols), def);
-        m_back_buffer.assign(static_cast<size_t>(m_rows * m_cols), def);
+        m_front_buffer.assign(total, def);
+        m_back_buffer.assign(total, def);
+        m_hit_buffer.assign(total, TAG_NONE);
+    }
+
+    auto Frame::tag_cell(int row, int col, int tag_id) -> void
+    {
+        if (row < 0 || row >= m_rows || col < 0 || col >= m_cols) return;
+        m_hit_buffer[static_cast<size_t>(row * m_cols + col)] = tag_id;
+    }
+
+    auto Frame::tag_area(Area area, int tag_id) -> void
+    {
+        if (!area.is_valid()) return;
+        int r_end = std::min(area.bottom(), m_rows);
+        int c_end = std::min(area.right(), m_cols);
+        for (int r = std::max(0, area.row); r < r_end; ++r)
+        {
+            for (int c = std::max(0, area.col); c < c_end; ++c)
+            {
+                m_hit_buffer[static_cast<size_t>(r * m_cols + c)] = tag_id;
+            }
+        }
+    }
+
+    auto Frame::hit_at(int row, int col) const -> int
+    {
+        if (row < 0 || row >= m_rows || col < 0 || col >= m_cols) return TAG_NONE;
+        return m_hit_buffer[static_cast<size_t>(row * m_cols + col)];
+    }
+
+    auto Frame::clear_hit_buffer(int default_tag) -> void
+    {
+        std::fill(m_hit_buffer.begin(), m_hit_buffer.end(), default_tag);
     }
 
     auto Frame::to_plain_text_row(int r) const -> std::string

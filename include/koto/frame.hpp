@@ -8,6 +8,8 @@
 
 namespace koto
 {
+    inline constexpr int TAG_NONE = -1;
+
     class Frame
     {
 
@@ -18,16 +20,22 @@ namespace koto
             ~Frame() = default;
 
             auto handle_resize(int rows, int cols) -> void;
-            auto set_cell(int row, int col, Cell c) -> void;
+            auto set_cell(int row, int col, Cell c, int tag_id = TAG_NONE) -> void;
             auto get_cell(int row, int col) const -> Cell;
             auto operator[](int row, int col) -> Cell&;
             auto operator[](int row, int col) const -> const Cell&;
-            auto fill(Area area, Cell c) -> void;
-            auto fill(Area area, char32_t ch, uint32_t fg = COLOR_DEFAULT, uint32_t bg = COLOR_DEFAULT) -> void;
+            auto fill(Area area, Cell c, int tag_id = TAG_NONE) -> void;
+            auto fill(Area area, char32_t ch, uint32_t fg = COLOR_DEFAULT, uint32_t bg = COLOR_DEFAULT, int tag_id = TAG_NONE) -> void;
             auto clear_back_buffer() -> void;
             auto render() -> void;
             auto set_cursor(int row, int col) -> void;
             auto area() const -> Area;
+
+            // Spatial Tag / Hit-Buffer API
+            auto tag_cell(int row, int col, int tag_id) -> void;
+            auto tag_area(Area area, int tag_id) -> void;
+            auto hit_at(int row, int col) const -> int;
+            auto clear_hit_buffer(int default_tag = TAG_NONE) -> void;
 
             // Snapshot testing & inspection
             auto to_plain_text() const -> std::string;
@@ -42,6 +50,7 @@ namespace koto
             int m_rows , m_cols;
             std::vector<Cell> m_front_buffer;
             std::vector<Cell> m_back_buffer;
+            std::vector<int> m_hit_buffer;
             std::string m_output;              // output buffer for batched write
             uint32_t m_cur_fg = COLOR_DEFAULT;  // tracked SGR fg
             uint32_t m_cur_bg = COLOR_DEFAULT;  // tracked SGR bg

@@ -734,6 +734,78 @@ void test_zero_overhead_modernizations()
     std::cout << "PASSED\n";
 }
 
+void test_hit_buffer_and_box_focus()
+{
+    std::cout << "[Test 17] Frame hit-buffer (-1 default tag) & Box visual focus... ";
+
+    // 1. Initial hit buffer filled with TAG_NONE (-1)
+    {
+        Frame frame(4, 10);
+        for (int r = 0; r < 4; ++r)
+        {
+            for (int c = 0; c < 10; ++c)
+            {
+                assert(frame.hit_at(r, c) == TAG_NONE);
+            }
+        }
+        // Out of bounds queries return TAG_NONE (-1)
+        assert(frame.hit_at(-1, 0) == TAG_NONE);
+        assert(frame.hit_at(4, 10) == TAG_NONE);
+    }
+
+    // 2. set_cell with tag_id and tag_area
+    {
+        Frame frame(10, 20);
+        frame.set_cell(2, 3, Cell{U'X', Color::White, Color::Black}, 101);
+        assert(frame.hit_at(2, 3) == 101);
+        assert(frame.hit_at(2, 4) == TAG_NONE);
+
+        // tag_area
+        Area dialog(4, 5, 8, 4); // rows 4..7, cols 5..12
+        frame.tag_area(dialog, 202);
+        assert(frame.hit_at(4, 5) == 202);
+        assert(frame.hit_at(7, 12) == 202);
+        assert(frame.hit_at(3, 5) == TAG_NONE);
+        assert(frame.hit_at(8, 12) == TAG_NONE);
+
+        // Overlapping draw (modal popup overwriting background area)
+        Area modal(5, 6, 4, 2); // rows 5..6, cols 6..9
+        frame.tag_area(modal, 999);
+        assert(frame.hit_at(5, 6) == 999);
+        assert(frame.hit_at(4, 5) == 202); // surrounding area remains 202!
+    }
+
+    // 3. Box with .id(int) and .focused(bool)
+    {
+        Frame frame(6, 20);
+        Box()
+            .title("Panel A")
+            .id(1)
+            .focused(false)
+            .draw(frame, Area(0, 0, 10, 6));
+
+        // Unfocused border should match m_fg (default)
+        assert(frame.hit_at(0, 0) == 1);
+        assert(frame.hit_at(2, 4) == 1); // interior tagged even when not filled!
+        assert(frame.hit_at(0, 11) == TAG_NONE);
+
+        // Focused box
+        Box()
+            .title("Panel B")
+            .id(2)
+            .focused(true)
+            .focused_border_fg(Color::Emerald)
+            .draw(frame, Area(0, 10, 10, 6));
+
+        assert(frame.hit_at(0, 10) == 2);
+        assert(frame.hit_at(3, 15) == 2);
+        // Border cell color should be Color::Emerald
+        assert(frame.get_cell(0, 10).fg == Color::Emerald);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -756,9 +828,10 @@ int main()
     test_kitty_keyboard_and_paste();
     test_cpp23_modernizations();
     test_zero_overhead_modernizations();
+    test_hit_buffer_and_box_focus();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 16 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 17 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

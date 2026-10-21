@@ -47,6 +47,12 @@ namespace koto
             Box& borders(Borders borders);
             Box& title(std::string title);
             Box& title_align(TitleAlign align);
+            Box& focused(bool is_focused);
+            Box& focused_border_fg(std::string_view fg);
+            Box& focused_border_fg(uint32_t fg);
+            Box& focused_border_style(BorderStyle style);
+            Box& id(int tag_id);
+            Box& tag(int tag_id);
             void draw(Frame& frame, Area area) override;
 
         private:
@@ -58,5 +64,10 @@ namespace koto
             struct Borders m_borders;
             std::string m_title = "";
             TitleAlign m_title_align = TitleAlign::Center;
+            bool m_focused = false;
+            uint32_t m_focused_border_fg = Color::Cyan;
+            BorderStyle m_focused_border_style = BorderStyle::Thick;
+            bool m_has_focused_border_style = false;
+            int m_tag_id = -1;
     };
 }
