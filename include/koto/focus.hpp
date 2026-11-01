@@ -6,7 +6,6 @@
 #include <concepts>
 #include <cstddef>
 #include <functional>
-#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -148,6 +147,9 @@ namespace koto
         FocusManager& add(Id id, std::function<bool(const KeyEvent&)> on_key = nullptr,
                                  std::function<bool(const MouseEvent&)> on_mouse = nullptr);
 
+        // 3. Register or update a type-erased FocusTarget in-place
+        void register_target(FocusTarget target);
+
         // Navigation (Tab / Shift+Tab / Index / Id / State)
         bool next();                               // Tab forward
         bool prev();                               // Shift+Tab / BackTab backward
@@ -246,7 +248,5 @@ namespace koto
         FocusKeyInterceptor m_key_interceptor = nullptr;
         FocusChangeValidator m_change_validator = nullptr;
         FocusChangeObserver m_change_observer = nullptr;
-
-        void register_target(FocusTarget target);
     };
 }

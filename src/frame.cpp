@@ -1,10 +1,10 @@
 #include "koto/frame.hpp"
 #include "koto/cell.hpp"
+#include "koto/io.hpp"
 #include "koto/layout.hpp"
 #include "koto/terminal.hpp"
 #include "koto/utf8.hpp"
 #include <algorithm>
-#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -277,19 +277,8 @@ namespace koto
         // flush entire frame in one write if attached to a terminal and flush requested
         if (flush && m_term != nullptr && !m_output.empty())
         {
-            const char* ptr = m_output.data();
-            size_t rem = m_output.size();
-            while (rem > 0)
-            {
-                ssize_t written = write(STDOUT_FILENO, ptr, rem);
-                if (written < 0)
-                {
-                    if (errno == EINTR) continue;
-                    break;
-                }
-                ptr += written;
-                rem -= static_cast<size_t>(written);
-            }
+            static_cast<void>(write_all(STDOUT_FILENO, m_output));
+            
             fflush(stdout);
         }
     }

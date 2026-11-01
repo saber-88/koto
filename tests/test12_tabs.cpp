@@ -180,7 +180,7 @@ int main()
                     {
                         bool light = ((r + c) % 2 == 0);
                         uint32_t bg_col = light ? Color::Rgb(240, 217, 181) : Color::Rgb(181, 136, 99);
-                        frame.fill(grid[r][c], U' ', Color::White, bg_col);
+                        Fill().bg(bg_col).draw(frame, grid[r][c]);
                     }
                 }
                 break;

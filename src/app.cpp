@@ -24,6 +24,7 @@ namespace koto
     App& App::on_mouse(std::function<void(const MouseEvent&)> handler)
     {
         m_mouse_handler = std::move(handler);
+        m_term.enable_mouse_capture();
         return *this;
     }
     App& App::on_tick(std::function<void()> handler)
@@ -48,6 +49,21 @@ namespace koto
     {
         m_render_handler = std::move(render_function);
         run();
+    }
+
+    Area App::area() const noexcept
+    {
+        return m_frame.area();
+    }
+
+    Id App::hit_at(int row, int col) const
+    {
+        return m_frame.hit_at(row, col);
+    }
+
+    Id App::hit_at(const MouseEvent& mouse) const
+    {
+        return m_frame.hit_at(mouse.row, mouse.col);
     }
 
     void App::quit()
@@ -103,13 +119,16 @@ namespace koto
 
         if (auto* mouse = ev.as_mouse())
         {
+            MouseEvent m = *mouse;
+            m.target = m_frame.hit_at(m.row, m.col);
+
             if (m_mouse_handler)
             {
-                m_mouse_handler(*mouse);
+                m_mouse_handler(m);
             }
             if (m_focus_manager)
             {
-                if (m_focus_manager->handle_mouse(*mouse, m_frame))
+                if (m_focus_manager->handle_mouse(m, m_frame))
                 {
                     m_needs_draw = true;
                 }

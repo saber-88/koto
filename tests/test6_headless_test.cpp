@@ -1731,6 +1731,147 @@ void test_modal_mouse_focus_transition()
     std::cout << "PASSED\n";
 }
 
+void test_frame_abstractions_fill_and_mouse_target()
+{
+    std::cout << "[Test 24] Frame abstractions: Fill, Clear, app.area(), and mouse.target... ";
+
+    // 1. Fill widget test
+    Frame frame(5, 10);
+    Area fill_area(1, 2, 4, 3);
+    Fill().bg(Color::Cyan).fg(Color::Yellow).char_code(U'#').id(Id("fill_test")).draw(frame, fill_area);
+
+    for (int r = 1; r < 4; ++r)
+    {
+        for (int c = 2; c < 6; ++c)
+        {
+            Cell cell = frame.get_cell(r, c);
+            assert(cell.ch == U'#');
+            assert(cell.bg == Color::Cyan);
+            assert(cell.fg == Color::Yellow);
+            assert(frame.hit_at(r, c) == Id("fill_test"));
+        }
+    }
+
+    // 2. Clear widget test
+    Clear().draw(frame, Area(1, 2, 2, 2));
+    for (int r = 1; r < 3; ++r)
+    {
+        for (int c = 2; c < 4; ++c)
+        {
+            Cell cell = frame.get_cell(r, c);
+            assert(cell.ch == U' ');
+            assert(cell.bg == COLOR_DEFAULT);
+        }
+    }
+
+    // 3. App area and hit_at methods
+    App app;
+    app.frame().handle_resize(24, 80);
+    assert(app.area() == Area(0, 0, 80, 24));
+
+    Area btn_area(5, 10, 15, 3);
+    app.frame().tag_area(btn_area, Id("my_btn"));
+
+    MouseEvent test_mouse{};
+    test_mouse.row = 6;
+    test_mouse.col = 12;
+    test_mouse.button = MouseButton::Left;
+    test_mouse.action = MouseAction::Press;
+
+    assert(app.hit_at(6, 12) == Id("my_btn"));
+    assert(app.hit_at(test_mouse) == Id("my_btn"));
+
+    // 4. MouseEvent automatic target enrichment during dispatch
+    Id received_target = Id::none();
+    bool received_left_press = false;
+
+    app.on_mouse([&](const MouseEvent& m) {
+        received_target = m.target;
+        received_left_press = m.is_left_press();
+    });
+
+    app.dispatch_event(test_mouse);
+
+    assert(received_target == Id("my_btn"));
+    assert(received_left_press);
+
+    std::cout << "PASSED\n";
+}
+
+void test_button_widget()
+{
+    std::cout << "[Test 25] Button widget: rendering, focus styling, and click callback... ";
+
+    Frame frame(5, 20);
+    Area btn_area(1, 2, 16, 3);
+
+    int click_count = 0;
+    Button("Click Me")
+        .id(Id("btn_test"))
+        .border_style(BorderStyle::Rounded)
+        .on_click([&] { click_count++; })
+        .draw(frame, btn_area);
+
+    // 1. Rendering verification
+    std::string row1 = frame.to_plain_text_row(1); // top border
+    std::string row2 = frame.to_plain_text_row(2); // centered label
+    std::string row3 = frame.to_plain_text_row(3); // bottom border
+
+    assert(row1.find("╭") != std::string::npos);
+    assert(row1.find("╮") != std::string::npos);
+    assert(row2.find("Click Me") != std::string::npos);
+    assert(row3.find("╰") != std::string::npos);
+    assert(row3.find("╯") != std::string::npos);
+
+    // 2. Hit-testing verification
+    assert(frame.hit_at(2, 5) == Id("btn_test"));
+
+    // 3. FocusManager integration
+    FocusManager fm;
+    App app;
+    app.use_focus(fm);
+
+    fm.add(Id("dummy_input")); // target index 0
+
+    Button btn("Submit");
+    btn.id(Id("btn_submit"))
+       .focus(fm)
+       .focused_border_fg(Color::Emerald)
+       .on_click([&] { click_count += 10; });
+
+    // Draw with FocusManager
+    btn.draw(app.frame(), Area(2, 2, 14, 3));
+
+    // Initially dummy_input is focused, btn_submit is not
+    assert(!fm.is_focused(Id("btn_submit")));
+
+    // Focus the button
+    assert(fm.focus_id(Id("btn_submit")));
+    assert(fm.is_focused(Id("btn_submit")));
+
+    // Keyboard activation: Enter key
+    KeyEvent enter_key{static_cast<uint32_t>(Key::Enter)};
+    assert(fm.handle_key(enter_key));
+    assert(click_count == 10);
+
+    // Keyboard activation: Space key
+    KeyEvent space_key{' '};
+    assert(fm.handle_key(space_key));
+    assert(click_count == 20);
+
+    // Mouse click activation: left click inside bounds
+    MouseEvent click{};
+    click.row = 3;
+    click.col = 5;
+    click.button = MouseButton::Left;
+    click.action = MouseAction::Press;
+
+    app.dispatch_event(click);
+    assert(click_count == 30);
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -1760,9 +1901,11 @@ int main()
     test_audit_fixes_and_edge_cases();
     test_subitem_mouse_interaction();
     test_modal_mouse_focus_transition();
+    test_frame_abstractions_fill_and_mouse_target();
+    test_button_widget();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 23 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 25 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

@@ -35,6 +35,11 @@ namespace koto
         void run();
         void run(std::function<void(Frame&)> render_function);
 
+        // Screen geometry & hit-testing (abstracted away from Frame)
+        Area area() const noexcept;
+        Id hit_at(int row, int col) const;
+        Id hit_at(const MouseEvent& mouse) const;
+
         // Rendering & event dispatching (public for custom pipelines & headless testing)
         void draw_frame(bool flush = true);
         void dispatch_event(const Event& ev);

@@ -205,8 +205,8 @@ int main()
                 square_bg = Color::Rgb(80, 200, 120); // Highlight cursor in emerald green
             }
 
-            // Fill entire square with background color
-            frame.fill(square, U' ', Color::Default, square_bg);
+            // Fill entire square with background color using Fill widget
+            Fill().bg(square_bg).draw(frame, square);
 
             // Render chess piece
             const Piece& piece = board[r][c];

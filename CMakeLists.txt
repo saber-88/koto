@@ -25,6 +25,8 @@ add_library(koto
     src/text_area.cpp
     src/tabs.cpp
     src/focus.cpp
+    src/fill.cpp
+    src/button.cpp
 )
 
 target_include_directories(koto PUBLIC include)

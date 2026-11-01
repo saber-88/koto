@@ -1,5 +1,6 @@
 #pragma once
 
+#include "koto/id.hpp"
 #include <csignal>
 #include <cstdint>
 #include <string>
@@ -106,6 +107,15 @@ namespace koto
         bool shift = false;
         bool alt = false;
         bool ctrl = false;
+        Id target = Id::none();
+
+        constexpr bool is_press() const noexcept { return action == MouseAction::Press; }
+        constexpr bool is_release() const noexcept { return action == MouseAction::Release; }
+        constexpr bool is_move() const noexcept { return action == MouseAction::Move; }
+        constexpr bool is_left_press() const noexcept { return is_press() && button == MouseButton::Left; }
+        constexpr bool is_right_press() const noexcept { return is_press() && button == MouseButton::Right; }
+        constexpr bool is_wheel_up() const noexcept { return button == MouseButton::WheelUp; }
+        constexpr bool is_wheel_down() const noexcept { return button == MouseButton::WheelDown; }
     };
 
     struct Event : std::variant<KeyEvent, ResizeEvent, TickEvent, PasteEvent, MouseEvent>

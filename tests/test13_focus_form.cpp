@@ -66,20 +66,19 @@ int main()
     app.use_focus(fm);
 
     app.on_mouse([&](const MouseEvent& mouse) {
-        if (mouse.action == MouseAction::Press && mouse.button == MouseButton::Left)
+        if (mouse.is_left_press())
         {
             last_mouse_click = "Row: " + std::to_string(mouse.row) + ", Col: " + std::to_string(mouse.col);
             
-            // Check if user clicked directly on action buttons
-            Id clicked_id = app.frame().hit_at(mouse.row, mouse.col);
-            if (clicked_id == id_btn_save) {
+            // Check if user clicked directly on action buttons using enriched mouse.target
+            if (mouse.target == id_btn_save) {
                 status_message = "Clicked [ Save Profile ] — Profile saved!";
-            } else if (clicked_id == id_btn_reset) {
+            } else if (mouse.target == id_btn_reset) {
                 username_in.set_text("alex_mercer");
                 email_in.set_text("alex@example.com");
                 role_list.set_selected(0);
                 status_message = "Clicked [ Reset ] — Fields reset.";
-            } else if (clicked_id == id_btn_exit) {
+            } else if (mouse.target == id_btn_exit) {
                 app.quit();
             }
         }
@@ -190,31 +189,23 @@ int main()
             Constraint::fill()
         });
 
-        auto draw_button = [&](Area btn_area, Id id, std::string_view label, uint32_t active_col) {
-            bool is_foc = fm.is_focused(id);
-            uint32_t border_col = is_foc ? active_col : Color::DarkGray;
-            uint32_t text_col = is_foc ? Color::White : Color::LightGray;
+        Button("✔ Save Profile")
+            .id(id_btn_save)
+            .focus(fm)
+            .focused_border_fg(Color::Emerald)
+            .draw(frame, btn_cols[0]);
 
-            Box()
-                .border_style(BorderStyle::Rounded)
-                .fg(border_col)
-                .bg(is_foc ? Color::DarkGray : COLOR_DEFAULT)
-                .id(id)
-                .focused(is_foc)
-                .focused_border_fg(active_col)
-                .filled(true)
-                .draw(frame, btn_area);
+        Button("↺ Reset")
+            .id(id_btn_reset)
+            .focus(fm)
+            .focused_border_fg(Color::Yellow)
+            .draw(frame, btn_cols[1]);
 
-            Text(label)
-                .fg(text_col)
-                .bg(is_foc ? Color::DarkGray : COLOR_DEFAULT)
-                .align(TextAlign::Center)
-                .draw(frame, btn_area.inset(1, 1, 1, 1));
-        };
-
-        draw_button(btn_cols[0], id_btn_save, "✔ Save Profile", Color::Emerald);
-        draw_button(btn_cols[1], id_btn_reset, "↺ Reset", Color::Yellow);
-        draw_button(btn_cols[2], id_btn_exit, "✖ Exit", Color::Red);
+        Button("✖ Exit")
+            .id(id_btn_exit)
+            .focus(fm)
+            .focused_border_fg(Color::Red)
+            .draw(frame, btn_cols[2]);
 
         // 3. Status Box
         Box()

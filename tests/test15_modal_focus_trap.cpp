@@ -141,26 +141,24 @@ int main()
     });
 
     app.on_mouse([&](const MouseEvent& mouse) {
-        if (mouse.action == MouseAction::Press && mouse.button == MouseButton::Left) {
-            Id hit = app.frame().hit_at(mouse.row, mouse.col);
-
+        if (mouse.is_left_press()) {
             if (active_modal == ActiveModal::None) {
-                if (hit == id_btn_delete) {
+                if (mouse.target == id_btn_delete) {
                     open_delete_modal();
-                } else if (hit == id_btn_about) {
+                } else if (mouse.target == id_btn_about) {
                     open_about_modal();
                 }
             } else if (active_modal == ActiveModal::DeleteConfirm) {
-                if (hit == id_modal_confirm) {
+                if (mouse.target == id_modal_confirm) {
                     auto selected_file = files_list.selected_item().value_or("file");
                     toast_message = "Deleted file: " + std::string(selected_file);
                     close_modal();
-                } else if (hit == id_modal_cancel) {
+                } else if (mouse.target == id_modal_cancel) {
                     toast_message = "Deletion canceled.";
                     close_modal();
                 }
             } else if (active_modal == ActiveModal::AboutDialog) {
-                if (hit == id_modal_close_about) {
+                if (mouse.target == id_modal_close_about) {
                     close_modal();
                 }
             }
@@ -233,27 +231,17 @@ int main()
             Constraint::fill()
         });
 
-        auto draw_bg_btn = [&](Area btn_area, Id id, std::string_view label, uint32_t glow_col) {
-            bool is_foc = (active_modal == ActiveModal::None) && fm.is_focused(id);
-            Box()
-                .border_style(BorderStyle::Rounded)
-                .fg(is_foc ? glow_col : (active_modal != ActiveModal::None ? Color::DarkGray : Color::LightGray))
-                .bg(is_foc ? Color::DarkGray : COLOR_DEFAULT)
-                .id(id)
-                .focused(is_foc)
-                .focused_border_fg(glow_col)
-                .filled(true)
-                .draw(frame, btn_area);
+        Button("🗑 Delete File (Press 'D')")
+            .id(id_btn_delete)
+            .focused((active_modal == ActiveModal::None) && fm.is_focused(id_btn_delete))
+            .focused_border_fg(Color::Red)
+            .draw(frame, btn_row[0]);
 
-            Text(label)
-                .fg(is_foc ? Color::White : (active_modal != ActiveModal::None ? Color::DarkGray : Color::White))
-                .bg(is_foc ? Color::DarkGray : COLOR_DEFAULT)
-                .align(TextAlign::Center)
-                .draw(frame, btn_area.inset(1, 1, 1, 1));
-        };
-
-        draw_bg_btn(btn_row[0], id_btn_delete, "🗑 Delete File (Press 'D')", Color::Red);
-        draw_bg_btn(btn_row[1], id_btn_about, "ℹ About koto Focus", Color::Cyan);
+        Button("ℹ About koto Focus")
+            .id(id_btn_about)
+            .focused((active_modal == ActiveModal::None) && fm.is_focused(id_btn_about))
+            .focused_border_fg(Color::Cyan)
+            .draw(frame, btn_row[1]);
 
         // Status Toast Bar
         Box().border_style(BorderStyle::Single).fg(bg_border_fg).title("Status").draw(frame, v_splits[2]);
@@ -304,27 +292,19 @@ int main()
                 Constraint::fill()
             });
 
-            auto draw_modal_btn = [&](Area btn_area, Id id, std::string_view label, uint32_t active_col) {
-                bool is_foc = fm.is_focused(id);
-                Box()
-                    .border_style(BorderStyle::Rounded)
-                    .fg(is_foc ? active_col : Color::DarkGray)
-                    .bg(is_foc ? Color::DarkGray : Color::Black)
-                    .id(id)
-                    .focused(is_foc)
-                    .focused_border_fg(active_col)
-                    .filled(true)
-                    .draw(frame, btn_area);
+            Button("✔ Confirm Delete")
+                .id(id_modal_confirm)
+                .bg(Color::Black)
+                .focus(fm)
+                .focused_border_fg(Color::Red)
+                .draw(frame, modal_btns[0]);
 
-                Text(label)
-                    .fg(is_foc ? Color::White : Color::LightGray)
-                    .bg(is_foc ? Color::DarkGray : Color::Black)
-                    .align(TextAlign::Center)
-                    .draw(frame, btn_area.inset(1, 1, 1, 1));
-            };
-
-            draw_modal_btn(modal_btns[0], id_modal_confirm, "✔ Confirm Delete", Color::Red);
-            draw_modal_btn(modal_btns[1], id_modal_cancel, "✖ Cancel [Esc]", Color::Cyan);
+            Button("✖ Cancel [Esc]")
+                .id(id_modal_cancel)
+                .bg(Color::Black)
+                .focus(fm)
+                .focused_border_fg(Color::Cyan)
+                .draw(frame, modal_btns[1]);
 
         } else if (active_modal == ActiveModal::AboutDialog) {
             Area modal_area = Layout::center(screen, 48, 10);
@@ -353,22 +333,12 @@ int main()
 
             Text(about_text).fg(Color::White).bg(Color::Black).draw(frame, modal_v[0]);
 
-            bool is_foc = fm.is_focused(id_modal_close_about);
-            Box()
-                .border_style(BorderStyle::Rounded)
-                .fg(is_foc ? Color::Cyan : Color::DarkGray)
-                .bg(is_foc ? Color::DarkGray : Color::Black)
+            Button("Close Dialog [Enter / Esc]")
                 .id(id_modal_close_about)
-                .focused(is_foc)
+                .bg(Color::Black)
+                .focus(fm)
                 .focused_border_fg(Color::Cyan)
-                .filled(true)
                 .draw(frame, modal_v[1]);
-
-            Text("Close Dialog [Enter / Esc]")
-                .fg(is_foc ? Color::White : Color::LightGray)
-                .bg(is_foc ? Color::DarkGray : Color::Black)
-                .align(TextAlign::Center)
-                .draw(frame, modal_v[1].inset(1, 1, 1, 1));
         }
     });
 

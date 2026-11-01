@@ -3,7 +3,7 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux-orange.svg?logo=linux)](https://kernel.org)
-[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-23%20Passing-brightgreen.svg)]()
+[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-25%20Passing-brightgreen.svg)]()
 [![CJK & Unicode](https://img.shields.io/badge/Unicode-7%20Passing-brightgreen.svg)]()
 [![Zero Warnings](https://img.shields.io/badge/Compiler%20Warnings-Zero-brightgreen.svg)]()
 
@@ -45,6 +45,8 @@ Traditional terminal UI development in C and C++ has long been burdened by low-l
 | - Event dispatch: on_key, on_mouse, on_paste, on_tick, on_render                |
 +---------------------------------------------------------------------------------+
 | Layer 2: State-Driven Widgets & Layout Engine                                   |
+| - Button: Dual mouse/keyboard activation, automatic FocusManager integration    |
+| - Fill & Clear: Declarative solid color background & canvas clearing           |
 | - TextArea: Gutter line numbers, Sticky/Clamp cursor, Margin/Clamp scroll       |
 | - Tabs: Bar, Pill, Underline styles, sub-item mouse hit detection & wheel cycle |
 | - List: Full-width row highlights, Wrap/Clamp navigation, sub-item row clicking |
@@ -63,6 +65,7 @@ Traditional terminal UI development in C and C++ has long been burdened by low-l
 | - EventLoop: POSIX signalfd SIGWINCH, ioctl FIONREAD burst draining, SGR 1006   |
 | - Cell & Color: 24-bit TrueColor RGB, 256-color palette, linear lerp gradients |
 | - UTF-8: Codepoint widths, multi-byte decoding, wide CJK & 2-column emojis      |
+| - Robust I/O: EINTR-immune write_all(), SIGTERM & SIGHUP emergency recovery     |
 +---------------------------------------------------------------------------------+
 ```
 
@@ -434,6 +437,39 @@ TextInput(username).draw(frame, user_area);
 
 ---
 
+### 12. `Button` (Clickable Focusable Button)
+Declarative button component with automatic `FocusManager` integration, focus highlight styling, and mouse click / Enter key synthesis:
+
+* **Dual Activation**: Triggered identically by left mouse click OR keyboard `Enter` / `Space`.
+* **Zero-Boilerplate Focus Wiring**: Attaching `.focus(fm)` automatically queries `fm.is_focused(id)` and registers target bounds in-place.
+* **Custom Styling**: Full control over border styles, normal colors, and active focused highlight borders (`focused_border_fg`).
+
+```cpp
+Button("✔ Save Profile")
+    .id(ID("save_btn"))
+    .focus(fm)
+    .focused_border_fg(Color::Emerald)
+    .on_click([&] {
+        save_profile();
+    })
+    .draw(frame, btn_area);
+```
+
+---
+
+### 13. `Fill` & `Clear` (Declarative Backgrounds)
+Fills rectangular areas with solid colors or clears canvases without reaching into low-level framebuffer memory:
+
+```cpp
+// Fill an area with a background color
+Fill().bg(Color::Rgb(181, 136, 99)).draw(frame, square_area);
+
+// Clear an area to default colors
+Clear().draw(frame, dialog_area);
+```
+
+---
+
 ## ⚡ Metal Core & Terminal Protocols
 
 ### DEC Mode 2026 (Synchronized Updates)
@@ -508,6 +544,50 @@ Rapid mouse drags or wheel bursts can emit dozens of escape sequences per millis
 
 ---
 
+### Robust Stream I/O & `write_all()` Loop (`include/koto/io.hpp`)
+In POSIX systems, `write(fd, buf, count)` is **not guaranteed** to write all requested bytes in a single call. Under heavy terminal rendering, slow TTYs, or across pseudoterminals and pipes, the operating system may perform a **partial write**, returning fewer bytes than requested. Furthermore, if a signal is caught while `write()` is blocked, it returns `-1` with `errno == EINTR`.
+
+Naive TUI libraries that call `::write()` with fixed size assumptions silently drop trailing escape sequences or abort rendering mid-frame when interrupted by OS signals, leaving corrupted ANSI sequences on screen.
+
+`koto` solves this with a robust stream writer in `include/koto/io.hpp`:
+```cpp
+[[nodiscard]] inline std::expected<void, int> write_all(int fd, std::string_view data);
+```
+
+* **Complete Byte Delivery**: Loops until all bytes in `data` are transferred (`rem == 0`), advancing internal pointers across partial write boundaries.
+* **`EINTR` Signal Immunity**: Automatically retries if interrupted by a signal handler before data was written (`if (errno == EINTR) continue;`).
+* **C++23 Monadic Error Handling**: Returns `std::expected<void, int>`, propagating `std::unexpected(errno)` on fatal I/O errors without throwing exceptions.
+* **Universal Application**: All terminal mode toggles, cursor movements, and frame buffer flushes (`Frame::render()`) route through `write_all()`, guaranteeing atomic and uncorrupted escape sequence delivery.
+
+---
+
+### Emergency Crash & Signal Recovery (`SIGTERM` & `SIGHUP` Teardown)
+When a terminal application terminates normally, C++ destructors (`Terminal::~Terminal()`) restore the terminal to canonical cooked mode. However, if an application is killed abruptly—such as via `kill <pid>` (`SIGTERM`), or when the terminal tab/window is closed or an SSH connection drops (`SIGHUP`)—the Linux kernel aborts the process immediately.
+
+Without dedicated signal handlers, C++ stack unwinding is bypassed, leaving the user's host shell in a severely broken state:
+* **Raw Mode Trapped**: Terminal echo is disabled (`-ECHO`), line buffering is disabled (`-ICANON`), and `Ctrl+C` (`-ISIG`) no longer works. Keystrokes are invisible and Enter prints newlines without carriage returns.
+* **Stranded in Alternate Screen Buffer**: The shell remains trapped in the secondary screen buffer (`\033[?1049h`).
+* **Invisible Cursor**: The cursor remains hidden (`\033[?25l`).
+* **SGR Mouse Mode Leaking**: The terminal emulator continues reporting mouse clicks as raw escape sequences (`\033[<0;15;7M`) spamming the command line prompt.
+* **Kitty Keyboard & Bracketed Paste Stuck**: Modified keys emit raw escape codes rather than standard characters.
+
+`koto` installs dedicated emergency signal handlers for `SIGTERM` and `SIGHUP` via `sigaction()` with `SA_RESETHAND`:
+
+1. **Async-Signal-Safe Restoration (`restore_minimal() noexcept`)**: Emits a single, compact composite escape sequence to turn off mouse reporting, pop Kitty keyboard flags, disable bracketed paste, restore cursor visibility, and exit the alternate screen:
+   ```cpp
+   constexpr char seq[] = "\033[?1006l\033[?1002l\033[?1000l"   // mouse off
+                          "\033[<u"                              // pop kitty keyboard
+                          "\033[?2004l"                          // bracketed paste off
+                          "\033[?25h"                            // show cursor
+                          "\033[?1049l";                         // leave alt screen
+   ```
+2. **`errno` Preservation**: Captures and restores `errno` within the signal handler so interrupted system calls in the caller context are not clobbered.
+3. **Canonical Mode Restoration**: Re-applies the saved `termios` attributes via `tcsetattr(STDIN_FILENO, TCSANOW, &g_saved)`.
+4. **Signal Re-Raising (`raise(sig)`)**: Re-raises the fatal signal so parent shells, Docker, systemd, or process supervisors correctly detect process termination by signal with standard exit codes (e.g. `128 + 15` for SIGTERM).
+5. **Clean Uninstallation**: When `Terminal::restore_terminal()` executes during normal RAII destruction, signal handlers are cleanly restored to their original dispositions.
+
+---
+
 ## 🧪 Headless Snapshot Testing (CI/CD Ready)
 
 `koto` was engineered from day one for test-driven development. You can construct an in-memory `Frame(rows, cols)` without attaching to a terminal, execute layout and widget draws, and assert on exact characters:
@@ -543,7 +623,7 @@ void test_box_and_list()
 
 Run the built-in test suites:
 ```bash
-# 23 comprehensive snapshot tests (Box, List, Layout, Gauge, Sparkline, Grid, TextArea, Tabs, Kitty CSI u, Paste, C++23 native features, Hit-Buffer, FocusManager, Spatial 2D, Modal Scoping, Sub-item clicks)
+# 25 comprehensive snapshot tests (Box, List, Layout, Gauge, Sparkline, Grid, TextArea, Tabs, Kitty CSI u, Paste, C++23 native features, Hit-Buffer, FocusManager, Spatial 2D, Modal Scoping, Sub-item clicks, Fill, Button)
 ./build/test6_headless_test
 
 # 7 UTF-8 / CJK / Emoji width & continuation cell tests
@@ -564,7 +644,7 @@ The repository includes **15 standalone showcase programs** demonstrating every 
 | **`test3_vbox`** | Declarative flex and percentage layout composition (`VBox` / `HBox`). |
 | **`test4_text_input`** | 3-layer input customization: Pre-hook interceptors, validation filters, and modal Vim editing with `Tab` / `Shift+Tab` focus cycling. |
 | **`test5_yazi`** | A 3-column Miller column file explorer inspired by Yazi with live file previews via `TextArea`. |
-| **`test6_headless_test`** | Automated headless snapshot test suite with 23 tests and zero terminal dependencies. |
+| **`test6_headless_test`** | Automated headless snapshot test suite with 25 tests and zero terminal dependencies. |
 | **`test7_dashboard`** | Real-time 60 FPS system telemetry monitor demonstrating Gauge with fractional sub-blocks, rolling Sparklines, titled Rules, and Color lerping. |
 | **`test8_text_cjk_emoji`** | Comprehensive UTF-8 test suite asserting CJK ideographs, 2-column emojis, continuation cells, overwrite protection, and wide text alignment. |
 | **`test9_chess_board`** | Fully playable 8x8 interactive Chess board demonstrating `Layout::grid_uniform`, `Frame::fill`, alternating wood squares, and Unicode chess piece rendering. |
@@ -596,7 +676,11 @@ Run any showcase directly from `./build/`:
   - [x] Bracketed Paste Mode (`\033[?2004h`) with `PasteEvent` and newline normalization
   - [x] Headless virtual `Frame` for CI/CD automated snapshot testing
   - [x] POSIX `signalfd` SIGWINCH terminal resize handling and RAII alternate screen buffer
+  - [x] Robust stream I/O via `write_all()` loop with `EINTR` retry and short-write protection
+  - [x] Emergency signal teardown (`SIGTERM` & `SIGHUP`) with async-signal-safe terminal restoration
 - [x] **Phase 2: State-Driven Widgets & Layouts**
+  - [x] `Button` declarative focusable button with mouse click and keyboard activation
+  - [x] `Fill` and `Clear` declarative background and canvas clearing widgets
   - [x] `Box` with 5 border styles and 3-way title alignment
   - [x] `Text` with hard newline preservation, soft wrapping, and tab stops
   - [x] `List` with full-width row backgrounds, prefix markers, and `TextOverflow`
