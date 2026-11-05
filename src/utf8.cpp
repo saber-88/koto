@@ -26,27 +26,27 @@ namespace koto
         else if (byte < 0xE0)
         {
             if (in.size() < 2) { in = {}; return U'\uFFFD'; }
-            char32_t cp = static_cast<char32_t>((byte & 0x1F) << 6);
-            cp |= (static_cast<uint8_t>(in[1]) & 0x3F);
+            char32_t cp = static_cast<char32_t>((static_cast<uint32_t>(byte) & 0x1Fu) << 6);
+            cp |= static_cast<char32_t>(static_cast<uint32_t>(static_cast<uint8_t>(in[1])) & 0x3Fu);
             in.remove_prefix(2);
             return cp;
         }
         else if (byte < 0xF0)
         {
             if (in.size() < 3) { in = {}; return U'\uFFFD'; }
-            char32_t cp = static_cast<char32_t>((byte & 0x0F) << 12);
-            cp |= static_cast<char32_t>((static_cast<uint8_t>(in[1]) & 0x3F) << 6);
-            cp |= static_cast<char32_t>(static_cast<uint8_t>(in[2]) & 0x3F);
+            char32_t cp = static_cast<char32_t>((static_cast<uint32_t>(byte) & 0x0Fu) << 12);
+            cp |= static_cast<char32_t>((static_cast<uint32_t>(static_cast<uint8_t>(in[1])) & 0x3Fu) << 6);
+            cp |= static_cast<char32_t>(static_cast<uint32_t>(static_cast<uint8_t>(in[2])) & 0x3Fu);
             in.remove_prefix(3);
             return cp;
         }
         else
         {
             if (in.size() < 4) { in = {}; return U'\uFFFD'; }
-            char32_t cp = static_cast<char32_t>((byte & 0x07) << 18);
-            cp |= static_cast<char32_t>((static_cast<uint8_t>(in[1]) & 0x3F) << 12);
-            cp |= static_cast<char32_t>((static_cast<uint8_t>(in[2]) & 0x3F) << 6);
-            cp |= static_cast<char32_t>(static_cast<uint8_t>(in[3]) & 0x3F);
+            char32_t cp = static_cast<char32_t>((static_cast<uint32_t>(byte) & 0x07u) << 18);
+            cp |= static_cast<char32_t>((static_cast<uint32_t>(static_cast<uint8_t>(in[1])) & 0x3Fu) << 12);
+            cp |= static_cast<char32_t>((static_cast<uint32_t>(static_cast<uint8_t>(in[2])) & 0x3Fu) << 6);
+            cp |= static_cast<char32_t>(static_cast<uint32_t>(static_cast<uint8_t>(in[3])) & 0x3Fu);
             in.remove_prefix(4);
             return cp;
         }
