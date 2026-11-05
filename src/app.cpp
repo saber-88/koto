@@ -2,6 +2,8 @@
 #include "koto/event.hpp"
 #include "koto/frame.hpp"
 #include "koto/utf8.hpp"
+#include <algorithm>
+#include <chrono>
 
 namespace koto
 {
@@ -183,24 +185,72 @@ namespace koto
         m_running = true;
         m_needs_draw = true;
 
+        using clock = std::chrono::steady_clock;
+        auto next_frame = clock::now();
+
         while (m_running)
         {
-            if (m_tick_handler)
+            // 1. Calculate wait timeout:
+            // - If events are already pending in memory or we need a redraw, don't wait (0ms).
+            // - If an animation tick handler is active, wait for the remaining time in this 16ms frame (~60 FPS).
+            // - If static (no animation tick handler), sleep in kernel poll indefinitely (-1ms) until input arrives.
+            int32_t wait_ms = -1;
+            if (m_loop.has_pending() || m_needs_draw)
             {
-                m_tick_handler();
-                m_needs_draw = true;
+                wait_ms = 0;
+            }
+            else if (m_tick_handler)
+            {
+                auto now = clock::now();
+                if (now < next_frame)
+                {
+                    auto rem = std::chrono::duration_cast<std::chrono::milliseconds>(next_frame - now).count();
+                    wait_ms = static_cast<int32_t>(std::clamp(rem, 0L, 16L));
+                }
+                else
+                {
+                    wait_ms = 0;
+                }
             }
 
-            if (m_needs_draw)
-            {
-                this->draw_frame();
-            }
-
-            int32_t wait_ms = m_loop.has_pending() ? 0 : 16;
             Event ev = m_loop.poll(wait_ms);
             if (!ev.is_tick())
             {
                 this->dispatch_event(ev);
+            }
+
+            // 2. Event Draining / Batching:
+            // Consume ALL pending input events that accumulated in the buffer or stdin
+            // BEFORE executing the tick and render passes. This prevents keyboard auto-repeat
+            // (holding arrow keys) from building up an event backlog that causes lag propagation.
+            while (m_running)
+            {
+                Event pending_ev = m_loop.poll(0);
+                if (pending_ev.is_tick())
+                {
+                    break;
+                }
+                this->dispatch_event(pending_ev);
+            }
+
+            if (!m_running) break;
+
+            // 3. Periodic animation tick (triggered when frame time elapses)
+            if (m_tick_handler)
+            {
+                auto now = clock::now();
+                if (now >= next_frame)
+                {
+                    m_tick_handler();
+                    m_needs_draw = true;
+                    next_frame = now + std::chrono::milliseconds(16);
+                }
+            }
+
+            // 4. Render pass (rendered AT MOST ONCE per frame for all drained inputs)
+            if (m_needs_draw)
+            {
+                this->draw_frame();
             }
         }
     }
