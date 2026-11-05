@@ -63,6 +63,12 @@ namespace koto
         bool m_is_focused = false;
         bool m_manual_focus_set = false;
         bool m_has_focused_bg = false;
+        bool m_has_focused_fg = false;
+        bool m_has_focused_border_fg = false;
+        bool m_has_focused_label_fg = false;
+        bool m_has_label_fg = false;
+        bool m_has_fg = false;
+
         uint32_t m_focused_fg = Color::Cyan;
         uint32_t m_focused_bg = Color::DarkGray;
         uint32_t m_focused_border_fg = Color::Cyan;

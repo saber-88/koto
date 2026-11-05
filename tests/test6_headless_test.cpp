@@ -1869,6 +1869,32 @@ void test_button_widget()
     app.dispatch_event(click);
     assert(click_count == 30);
 
+    // 4. Focus styling verification (focused_fg vs focused_border_fg)
+    Frame foc_frame(5, 20);
+    Button("Submit")
+        .id(Id("btn_test_fg"))
+        .focused(true)
+        .focused_border_fg(Color::Cyan)
+        .focused_fg(Color::Green)
+        .draw(foc_frame, Area(1, 2, 14, 3));
+
+    // Top border corner [1, 2] should be Cyan
+    assert(foc_frame[1, 2].fg == Color::Cyan);
+    // Center label 'S' at [2, 6] should be Green
+    assert(foc_frame[2, 6].ch == U'S');
+    assert(foc_frame[2, 6].fg == Color::Green);
+
+    // When only focused_fg is provided, both border and label use focused_fg
+    Frame foc_only_frame(5, 20);
+    Button("Clear")
+        .id(Id("btn_test_only_fg"))
+        .focused(true)
+        .focused_fg(Color::Red)
+        .draw(foc_only_frame, Area(1, 2, 14, 3));
+    assert(foc_only_frame[1, 2].fg == Color::Red);
+    assert(foc_only_frame[2, 6].ch == U'C');
+    assert(foc_only_frame[2, 6].fg == Color::Red);
+
     std::cout << "PASSED\n";
 }
 
