@@ -71,6 +71,13 @@ namespace koto
     void App::quit()
     {
         m_running = false;
+        m_loop.wakeup();
+    }
+
+    void App::request_redraw() noexcept
+    {
+        m_needs_draw = true;
+        m_loop.wakeup();
     }
 
     void App::dispatch_event(const Event& ev)
@@ -220,17 +227,17 @@ namespace koto
             }
 
             // 2. Event Draining / Batching:
-            // Consume ALL pending input events that accumulated in the buffer or stdin
-            // BEFORE executing the tick and render passes. This prevents keyboard auto-repeat
-            // (holding arrow keys) from building up an event backlog that causes lag propagation.
-            while (m_running)
+            // Consume ALL pending input events that accumulated in the user-space buffer
+            // BEFORE executing the tick and render passes. Because EventLoop already drained
+            // all available bytes from kernel stdin with ioctl(FIONREAD), m_pending_input holds
+            // the full burst. Draining via has_pending() runs in user-space memory with zero syscalls.
+            while (m_running && m_loop.has_pending())
             {
                 Event pending_ev = m_loop.poll(0);
-                if (pending_ev.is_tick())
+                if (!pending_ev.is_tick())
                 {
-                    break;
+                    this->dispatch_event(pending_ev);
                 }
-                this->dispatch_event(pending_ev);
             }
 
             if (!m_running) break;

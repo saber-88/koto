@@ -155,12 +155,17 @@ namespace koto
 
             // Direct buffer parser (useful for testing or feeding synthetic input streams)
             static auto parse(std::string_view bytes) -> Event;
+            static auto on_sigwinch(int) -> void;
+
+            // Thread-safe async wakeup: unblocks poll() from any background worker thread
+            void wakeup() noexcept;
 
         private:
 
-            int m_signal_fd = -1;
-            sigset_t m_old_mask{};
+            static volatile sig_atomic_t m_pipe_write_fd;
             std::string m_pending_input;
+            struct sigaction m_old_sa{};
+            int m_pipe_fds[2] = {-1, -1};
 
             auto on_resize() -> Event;
             auto parse_stdin() -> Event;

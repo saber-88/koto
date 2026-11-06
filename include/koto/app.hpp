@@ -4,6 +4,7 @@
 #include "koto/focus.hpp"
 #include "koto/frame.hpp"
 #include "koto/terminal.hpp"
+#include <atomic>
 #include <functional>
 namespace koto
 {
@@ -32,6 +33,7 @@ namespace koto
         App& use_focus(FocusManager& fm);
 
         void quit();
+        void request_redraw() noexcept;
         void run();
         void run(std::function<void(Frame&)> render_function);
 
@@ -51,8 +53,8 @@ namespace koto
             Frame m_frame;
             EventLoop m_loop;
 
-            bool m_running = true;
-            bool m_needs_draw = true;
+            std::atomic<bool> m_running{true};
+            std::atomic<bool> m_needs_draw{true};
 
             FocusManager* m_focus_manager = nullptr;
 

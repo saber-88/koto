@@ -1,7 +1,9 @@
 #include <koto/koto.hpp>
 #include <cassert>
+#include <chrono>
 #include <iostream>
 #include <string>
+#include <thread>
 
 using namespace koto;
 
@@ -1898,6 +1900,43 @@ void test_button_widget()
     std::cout << "PASSED\n";
 }
 
+void test_self_pipe_and_wakeup()
+{
+    std::cout << "[Test 26] POSIX Self-Pipe & thread-safe EventLoop::wakeup... ";
+
+    EventLoop loop;
+
+    // 1. Test thread-safe wakeup from background thread
+    auto start_time = std::chrono::steady_clock::now();
+    std::thread worker([&loop]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        loop.wakeup();
+    });
+
+    // poll with a long timeout (1000ms). The background thread wakeup must interrupt it!
+    Event ev = loop.poll(1000);
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start_time
+    ).count();
+
+    worker.join();
+
+    // Must return TickEvent and finish well before 1000ms
+    assert(ev.is_tick());
+    assert(elapsed < 500);
+
+    // 2. Test SIGWINCH signal dispatch through self-pipe
+    EventLoop::on_sigwinch(SIGWINCH);
+    Event resize_ev = loop.poll(100);
+    assert(resize_ev.is_resize());
+
+    // 3. Subsequent poll when pipe is empty should return tick
+    Event idle_ev = loop.poll(10);
+    assert(idle_ev.is_tick());
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -1929,9 +1968,10 @@ int main()
     test_modal_mouse_focus_transition();
     test_frame_abstractions_fill_and_mouse_target();
     test_button_widget();
+    test_self_pipe_and_wakeup();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 25 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 26 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

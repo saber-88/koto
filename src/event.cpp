@@ -1,16 +1,18 @@
 #include "koto/event.hpp"
 #include "koto/utf8.hpp"
-#include <csignal>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <poll.h>
 #include <sys/ioctl.h>
-#include <sys/signalfd.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 namespace koto
 {
+    volatile sig_atomic_t EventLoop::m_pipe_write_fd = -1;
+    
     // Helper to decode XTerm / Kitty modifier parameter: 1 + flags
     // Bit 0: Shift (1)
     // Bit 1: Alt (2)
@@ -607,6 +609,25 @@ namespace koto
         }
         return ev;
     }
+    auto EventLoop::on_sigwinch([[maybe_unused]] int signum) -> void
+    {
+        int saved_errno = errno;
+        if (m_pipe_write_fd >= 0)
+        {
+            char b = 'R';
+            [[maybe_unused]] ssize_t written = write(static_cast<int>(m_pipe_write_fd), &b, 1);
+        }
+        errno = saved_errno;
+    }
+
+    auto EventLoop::wakeup() noexcept -> void
+    {
+        if (m_pipe_write_fd >= 0)
+        {
+            char b = 'W';
+            [[maybe_unused]] ssize_t written = write(static_cast<int>(m_pipe_write_fd), &b, 1);
+        }
+    }
 
     auto EventLoop::poll(std::int32_t timeout_ms) -> Event
     {
@@ -617,11 +638,11 @@ namespace koto
             return parse_stdin();
         }
 
-        // 2. Wait for stdin or SIGWINCH resize signal
+        // 2. Wait for stdin or self-pipe (SIGWINCH resize / async wakeup)
         struct pollfd pfds[2] =
         {
-            {STDIN_FILENO,  POLLIN, 0},
-            {m_signal_fd,   POLLIN, 0},
+            {STDIN_FILENO,    POLLIN, 0},
+            {m_pipe_fds[0],   POLLIN, 0},
         };
 
         int ret = ::poll(pfds, 2, timeout_ms);
@@ -631,13 +652,28 @@ namespace koto
             return TickEvent{};
         }
 
-        if (pfds[1].revents & POLLIN)
+        if (m_pipe_fds[0] >= 0 && (pfds[1].revents & POLLIN))
         {
-            // resize
-            struct signalfd_siginfo info;
-            ssize_t bytes = read(m_signal_fd, &info, sizeof(info));
-            static_cast<void>(bytes);
-            return on_resize();
+            // Drain self-pipe and check for resize signal or thread wakeup
+            char buf[64];
+            ssize_t bytes = read(m_pipe_fds[0], buf, sizeof(buf));
+            bool got_resize = false;
+            if (bytes > 0)
+            {
+                for (ssize_t i = 0; i < bytes; ++i)
+                {
+                    if (buf[static_cast<size_t>(i)] == 'R')
+                    {
+                        got_resize = true;
+                        break;
+                    }
+                }
+            }
+            if (got_resize)
+            {
+                return on_resize();
+            }
+            return TickEvent{};
         }
 
         if (pfds[0].revents & POLLIN)
@@ -686,20 +722,42 @@ namespace koto
 
     EventLoop::EventLoop()
     {   
-        sigset_t mask;
-        sigemptyset(&mask);
-        sigaddset(&mask, SIGWINCH);
-        sigprocmask(SIG_BLOCK, &mask, &m_old_mask);
-        m_signal_fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
+        if (pipe(m_pipe_fds) == 0)
+        {
+            for (int fd : m_pipe_fds)
+            {
+                int fl = fcntl(fd, F_GETFL, 0);
+                if (fl >= 0)
+                {
+                    fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+                }
+                int fdfl = fcntl(fd, F_GETFD, 0);
+                if (fdfl >= 0)
+                {
+                    fcntl(fd, F_SETFD, fdfl | FD_CLOEXEC);
+                }
+            }
+            m_pipe_write_fd = m_pipe_fds[1];
+            struct sigaction sa{};
+            sa.sa_handler = on_sigwinch;
+            sa.sa_flags = SA_RESTART;
+            sigaction(SIGWINCH, &sa, &m_old_sa);
+        }
     }
 
     EventLoop::~EventLoop()
     {
-        if (m_signal_fd >= 0)
+        m_pipe_write_fd = -1;
+        if (m_pipe_fds[0] >= 0)
         {
-            close(m_signal_fd);
+            close(m_pipe_fds[0]);
+            m_pipe_fds[0] = -1;
         }
-        // restore original signal mask
-        sigprocmask(SIG_SETMASK, &m_old_mask, nullptr);
+        if (m_pipe_fds[1] >= 0)
+        {
+            close(m_pipe_fds[1]);
+            m_pipe_fds[1] = -1;
+        }
+        sigaction(SIGWINCH, &m_old_sa, nullptr);
     }
 }
