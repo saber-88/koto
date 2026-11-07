@@ -611,16 +611,30 @@ namespace koto
             return;
         }
 
-        ScopeMode mode = m_scope_stack.back().mode;
+        ScopeEntry popped = m_scope_stack.back();
         m_scope_stack.pop_back();
 
-        if (mode == ScopeMode::Modal && !m_saved_focus_stack.empty())
+        if (popped.mode == ScopeMode::Modal)
         {
-            Id restored_id = m_saved_focus_stack.back();
-            m_saved_focus_stack.pop_back();
-            if (!restored_id.is_none())
+            Id popped_id(popped.id);
+            // Prune all targets that belonged specifically to this popped modal scope
+            std::erase_if(m_targets, [popped_id](const FocusTarget& t) {
+                return t.modal_scope == popped_id;
+            });
+
+            if (m_active_index >= m_targets.size() && !m_targets.empty())
             {
-                this->focus_id(restored_id);
+                m_active_index = m_targets.size() - 1;
+            }
+
+            if (!m_saved_focus_stack.empty())
+            {
+                Id restored_id = m_saved_focus_stack.back();
+                m_saved_focus_stack.pop_back();
+                if (!restored_id.is_none())
+                {
+                    this->focus_id(restored_id);
+                }
             }
         }
     }

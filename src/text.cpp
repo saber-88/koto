@@ -140,40 +140,52 @@ namespace koto
             }
 
             int col = start_col;
-            bool skipping = false;
-            std::string_view line_rem = line;
 
-            while (!line_rem.empty())
+            if (m_text_wrap == TextWrap::Wrap)
             {
-                char32_t cp = next_codepoint(line_rem);
-                if (cp == U'\r') continue;
-
-                if (skipping) continue;
-
-                // Tab stop alignment (4 spaces)
-                if (cp == U'\t')
+                // Word-wrapping implementation: breaks between words at whitespace
+                std::string_view line_rem = line;
+                while (!line_rem.empty() && row < area.bottom())
                 {
-                    int tab_size = 4;
-                    int rel = col - area.col;
-                    int next_stop = ((rel / tab_size) + 1) * tab_size;
-                    int target_col = area.col + next_stop;
-                    while (col < target_col && col < area.right())
+                    // Skip leading whitespace on a freshly wrapped line
+                    if (col == area.col && (line_rem.front() == ' ' || line_rem.front() == '\t'))
                     {
-                        frame.set_cell(row, col, {U' ', m_fg, m_bg});
-                        col++;
+                        line_rem.remove_prefix(1);
+                        continue;
                     }
-                    continue;
-                }
 
-                int w = codepoint_width(cp);
-                
-                if (col + w > area.right())
-                {
-                    if (m_text_wrap == TextWrap::Wrap)
+                    // Peek the next token (either a whitespace run or a word run)
+                    bool is_space = (line_rem.front() == ' ' || line_rem.front() == '\t');
+                    size_t token_len = 0;
+                    int token_width = 0;
+                    std::string_view scan = line_rem;
+
+                    while (!scan.empty())
                     {
-                        col = area.col;
-                        row++;
+                        char cp = scan.front();
+                        bool cp_is_space = (cp == ' ' || cp == '\t');
+                        if (cp_is_space != is_space) break;
 
+                        std::string_view prev_scan = scan;
+                        char32_t full_cp = next_codepoint(scan);
+                        token_len += (prev_scan.size() - scan.size());
+                        if (full_cp == '\t')
+                        {
+                            token_width += 4;
+                        }
+                        else
+                        {
+                            token_width += codepoint_width(full_cp);
+                        }
+                    }
+
+                    std::string_view token = line_rem.substr(0, token_len);
+
+                    // If it's a word and doesn't fit on the current line (and we're not at the line start):
+                    if (!is_space && col + token_width > area.right() && col > area.col)
+                    {
+                        row++;
+                        col = area.col;
                         if (row >= area.bottom())
                         {
                             if (m_overflow == TextOverflow::Ellipsis && area.right() > area.col)
@@ -183,7 +195,78 @@ namespace koto
                             return;
                         }
                     }
-                    else
+
+                    // Render token characters
+                    std::string_view token_rem = token;
+                    while (!token_rem.empty())
+                    {
+                        char32_t cp = next_codepoint(token_rem);
+                        if (cp == U'\r') continue;
+                        int w = (cp == U'\t') ? 4 : codepoint_width(cp);
+
+                        if (col + w > area.right())
+                        {
+                            row++;
+                            col = area.col;
+                            if (row >= area.bottom())
+                            {
+                                if (m_overflow == TextOverflow::Ellipsis && area.right() > area.col)
+                                {
+                                    frame.set_cell(row - 1, area.right() - 1, {U'…', m_fg, m_bg});
+                                }
+                                return;
+                            }
+                            if (cp == U' ' || cp == U'\t') continue;
+                        }
+
+                        if (cp == U'\t')
+                        {
+                            for (int i = 0; i < 4 && col < area.right(); ++i)
+                            {
+                                frame.set_cell(row, col++, {U' ', m_fg, m_bg});
+                            }
+                        }
+                        else
+                        {
+                            frame.set_cell(row, col, Cell{cp, m_fg, m_bg, w, false, m_attrs});
+                            col += w;
+                        }
+                    }
+
+                    line_rem.remove_prefix(token_len);
+                }
+            }
+            else
+            {
+                // NoWrap mode with optional clipping and ellipsis
+                bool skipping = false;
+                std::string_view line_rem = line;
+
+                while (!line_rem.empty())
+                {
+                    char32_t cp = next_codepoint(line_rem);
+                    if (cp == U'\r') continue;
+
+                    if (skipping) continue;
+
+                    // Tab stop alignment (4 spaces)
+                    if (cp == U'\t')
+                    {
+                        int tab_size = 4;
+                        int rel = col - area.col;
+                        int next_stop = ((rel / tab_size) + 1) * tab_size;
+                        int target_col = area.col + next_stop;
+                        while (col < target_col && col < area.right())
+                        {
+                            frame.set_cell(row, col, {U' ', m_fg, m_bg});
+                            col++;
+                        }
+                        continue;
+                    }
+
+                    int w = codepoint_width(cp);
+                    
+                    if (col + w > area.right())
                     {
                         if (m_overflow == TextOverflow::Ellipsis && area.right() > area.col)
                         {
@@ -192,10 +275,10 @@ namespace koto
                         skipping = true;
                         continue;
                     }
-                }
 
-                frame.set_cell(row, col, Cell{cp, m_fg, m_bg, w, false, m_attrs});
-                col += w;
+                    frame.set_cell(row, col, Cell{cp, m_fg, m_bg, w, false, m_attrs});
+                    col += w;
+                }
             }
 
             content = next_content;

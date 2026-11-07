@@ -19,7 +19,7 @@ namespace
 
     void restore_minimal() noexcept
     {        
-        constexpr char seq[] = "\033[?1006l\033[?1002l\033[?1000l"   // mouse off
+        constexpr char seq[] = "\033[?1006l\033[?1003l\033[?1002l\033[?1000l"   // mouse off
                                "\033[<u"                              // pop kitty keyboard
                                "\033[?2004l"                          // bracketed paste off
                                "\033[?25h"                            // show cursor
@@ -234,7 +234,7 @@ namespace koto
     {
         if (m_is_tty)
         {
-            static_cast<void>(write_all(STDOUT_FILENO, "\033[?1006l\033[?1002l\033[?1000l"));
+            static_cast<void>(write_all(STDOUT_FILENO, "\033[?1006l\033[?1003l\033[?1002l\033[?1000l"));
             std::fflush(stdout);
         }
     }
@@ -254,6 +254,25 @@ namespace koto
         if (m_is_tty)
         {
             static_cast<void>(write_all(STDOUT_FILENO, "\033[?1002l"));
+            std::fflush(stdout);
+        }
+    }
+
+    auto Terminal::enable_mouse_hover() const -> void
+    {
+        if (m_is_tty)
+        {
+            // 1003h: any-event mouse reporting (all motion including hover)
+            static_cast<void>(write_all(STDOUT_FILENO, "\033[?1003h"));
+            std::fflush(stdout);
+        }
+    }
+
+    auto Terminal::disable_mouse_hover() const -> void
+    {
+        if (m_is_tty)
+        {
+            static_cast<void>(write_all(STDOUT_FILENO, "\033[?1003l"));
             std::fflush(stdout);
         }
     }

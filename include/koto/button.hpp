@@ -38,7 +38,6 @@ namespace koto
 
         // Identification & Focus integration
         Button& id(Id id);
-        Button& id(std::string_view id_str);
         Button& focus(FocusManager& fm);
 
         // Action callback (triggered by click or Enter/Space)

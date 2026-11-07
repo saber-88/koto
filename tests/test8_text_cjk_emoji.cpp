@@ -107,6 +107,12 @@ void test_codepoint_widths()
     // "東京 (Tokyo)" -> 2 (東) + 2 (京) + 1 (space) + 7 ((Tokyo)) = 12
     assert(text_width("東京 (Tokyo)") == 12);
 
+    // Emojis with Variation Selector 16 and Zero-Width-Joiner (ZWJ) composite sequences
+    assert(text_width("❤️") == 2);
+    assert(text_width("👨‍👩‍👧‍👦") == 2);
+    assert(text_width("👩‍💻") == 2);
+    assert(text_width("🏳️‍🌈") == 2);
+
     std::cout << "PASSED\n";
 }
 

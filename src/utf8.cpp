@@ -221,6 +221,11 @@ namespace koto
         if (cp >= 0x1F000 && cp <= 0x1F02F) return true;
         if (cp >= 0x1F0A0 && cp <= 0x1F0FF) return true;
 
+        // Dingbats, Miscellaneous Symbols, and Technicals with emoji presentation in terminals
+        if (cp >= 0x2600 && cp <= 0x27BF) return true;
+        if (cp >= 0x2300 && cp <= 0x23FF) return true;
+        if (cp >= 0x2B50 && cp <= 0x2B55) return true;
+
         return false;
     }
 
@@ -251,7 +256,52 @@ namespace koto
         std::string_view rem = text;
         while (!rem.empty())
         {
-            width += codepoint_width(next_codepoint(rem));
+            char32_t cp = next_codepoint(rem);
+            if (cp == 0) break;
+
+            int w = codepoint_width(cp);
+
+            // Check for variation selector 16 (U+FE0F: Emoji presentation)
+            // If base symbol was width 1, VS16 forces emoji presentation width 2
+            std::string_view peek = rem;
+            if (!peek.empty())
+            {
+                char32_t next_cp = next_codepoint(peek);
+                if (next_cp == 0xFE0F)
+                {
+                    rem = peek;
+                    w = 2;
+                }
+            }
+
+            // Zero-Width-Joiner (ZWJ, U+200D) sequences (e.g. 👨‍👩‍👧‍👦, 👩‍💻, 🏳️‍🌈)
+            // When multiple emoji glyphs are glued via U+200D, the terminal displays the entire composite as 2 columns
+            while (!rem.empty())
+            {
+                std::string_view zwj_peek = rem;
+                char32_t next_cp = next_codepoint(zwj_peek);
+                if (next_cp == 0x200D)
+                {
+                    rem = zwj_peek;
+                    if (!rem.empty())
+                    {
+                        char32_t joined = next_codepoint(rem);
+                        (void)joined;
+                        std::string_view vs_peek = rem;
+                        if (!vs_peek.empty() && next_codepoint(vs_peek) == 0xFE0F)
+                        {
+                            rem = vs_peek;
+                        }
+                    }
+                    w = 2;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            width += w;
         }
         return width;
     }

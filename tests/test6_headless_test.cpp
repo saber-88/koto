@@ -2377,6 +2377,63 @@ void test_semantic_contract_and_color_type()
     std::cout << "PASSED\n";
 }
 
+void test_claude_findings_resolution()
+{
+    std::cout << "Running test_claude_findings_resolution... ";
+
+    // 1. std::array<Constraint, N> overload for Layout::vertical & horizontal
+    std::array<Constraint, 2> arr_c = {Constraint::fixed(10), Constraint::fill()};
+    Area screen{0, 0, 80, 24};
+    auto v_res = Layout::vertical(screen, arr_c);
+    static_assert(std::is_same_v<decltype(v_res), std::array<Area, 2>>);
+    assert(v_res[0].height == 10);
+    assert(v_res[1].height == 14);
+
+    auto h_res = Layout::horizontal(screen, arr_c);
+    static_assert(std::is_same_v<decltype(h_res), std::array<Area, 2>>);
+    assert(h_res[0].width == 10);
+    assert(h_res[1].width == 70);
+
+    // 2. Button::id("literal") without ambiguity
+    Button btn("Submit");
+    btn.id("submit_btn");
+    btn.id(Id("another_id"));
+
+    // 3. Text::wrap word-boundary wrapping
+    Frame wrap_frame(3, 12);
+    Text("hello world").wrap().draw(wrap_frame, wrap_frame.area());
+    assert(wrap_frame.to_plain_text_row(0).starts_with("hello world"));
+
+    Frame wrap_frame2(3, 10);
+    Text("hello beautiful world").wrap().draw(wrap_frame2, wrap_frame2.area());
+    assert(wrap_frame2.to_plain_text_row(0).starts_with("hello"));
+    assert(wrap_frame2.to_plain_text_row(1).starts_with("beautiful"));
+
+    // 4. pop_scope prunes modal targets from FocusManager
+    FocusManager fm;
+    Id bg_btn("bg_btn");
+    fm.add(bg_btn);
+    assert(fm.size() == 1);
+
+    {
+        IdScope modal(fm, "my_modal", ScopeMode::Modal);
+        Id modal_btn1("modal_btn1");
+        Id modal_btn2("modal_btn2");
+        fm.add(modal_btn1);
+        fm.add(modal_btn2);
+        assert(fm.size() == 3);
+    }
+    assert(fm.size() == 1);
+    assert(fm.current_id() == bg_btn);
+
+    // 5. Terminal hover methods exist and can be called safely
+    Terminal term;
+    term.enable_mouse_hover();
+    term.disable_mouse_hover();
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -2414,9 +2471,10 @@ int main()
     test_audit_concerns_resolution();
     test_zero_allocation_layout();
     test_semantic_contract_and_color_type();
+    test_claude_findings_resolution();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 31 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 32 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

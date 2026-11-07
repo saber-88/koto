@@ -77,6 +77,8 @@ namespace koto
             auto disable_mouse_capture() const -> void;
             auto enable_mouse_drag() const -> void;
             auto disable_mouse_drag() const -> void;
+            auto enable_mouse_hover() const -> void;
+            auto disable_mouse_hover() const -> void;
             
         private:
             struct termios og_terminal{};

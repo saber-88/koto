@@ -42,6 +42,8 @@ target_include_directories(koto PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
+target_compile_features(koto PUBLIC cxx_std_23)
+
 target_compile_options(koto PRIVATE 
     -Wall
     -Werror

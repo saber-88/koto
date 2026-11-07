@@ -99,12 +99,6 @@ namespace koto
         return *this;
     }
 
-    Button& Button::id(std::string_view id_str)
-    {
-        m_id = Id(id_str);
-        return *this;
-    }
-
     Button& Button::focus(FocusManager& fm)
     {
         m_fm = &fm;

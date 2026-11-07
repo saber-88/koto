@@ -260,7 +260,13 @@ namespace koto
         template <size_t N>
         inline std::array<Area, N> vertical(Area area, const std::array<Constraint, N>& constraints)
         {
-            return vertical(area, constraints.data());
+            LayoutResult lr = vertical(area, std::span<const Constraint>(constraints.data(), N));
+            std::array<Area, N> arr{};
+            for (size_t i = 0; i < N; ++i)
+            {
+                arr[i] = lr[i];
+            }
+            return arr;
         }
 
         template <size_t N>
@@ -278,7 +284,13 @@ namespace koto
         template <size_t N>
         inline std::array<Area, N> horizontal(Area area, const std::array<Constraint, N>& constraints)
         {
-            return horizontal(area, constraints.data());
+            LayoutResult lr = horizontal(area, std::span<const Constraint>(constraints.data(), N));
+            std::array<Area, N> arr{};
+            for (size_t i = 0; i < N; ++i)
+            {
+                arr[i] = lr[i];
+            }
+            return arr;
         }
 
         auto center(Area area, int width, int height) -> Area;
