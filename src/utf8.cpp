@@ -13,43 +13,118 @@ namespace koto
 
         uint8_t byte = static_cast<uint8_t>(in[0]);
 
+        // 1-byte ASCII (0x00 - 0x7F)
         if (byte < 0x80)
         {
             in.remove_prefix(1);
             return byte;
         }
-        else if (byte < 0xC0 || byte >= 0xF8)
+
+        // Stray continuation byte (0x80 - 0xBF) or overlong 2-byte lead (0xC0 - 0xC1)
+        if (byte < 0xC2 || byte >= 0xF5)
         {
             in.remove_prefix(1);
             return U'\uFFFD';
         }
-        else if (byte < 0xE0)
+
+        // 2-byte sequence (0xC2 - 0xDF)
+        if (byte < 0xE0)
         {
-            if (in.size() < 2) { in = {}; return U'\uFFFD'; }
+            if (in.size() < 2 || (static_cast<uint8_t>(in[1]) & 0xC0) != 0x80)
+            {
+                in.remove_prefix(1);
+                return U'\uFFFD';
+            }
             char32_t cp = static_cast<char32_t>((static_cast<uint32_t>(byte) & 0x1Fu) << 6);
             cp |= static_cast<char32_t>(static_cast<uint32_t>(static_cast<uint8_t>(in[1])) & 0x3Fu);
             in.remove_prefix(2);
             return cp;
         }
-        else if (byte < 0xF0)
+
+        // 3-byte sequence (0xE0 - 0xEF)
+        if (byte < 0xF0)
         {
-            if (in.size() < 3) { in = {}; return U'\uFFFD'; }
+            if (in.size() < 2)
+            {
+                in.remove_prefix(1);
+                return U'\uFFFD';
+            }
+            uint8_t b1 = static_cast<uint8_t>(in[1]);
+            // Disallow overlong (< 0x800) and UTF-16 surrogates (0xD800 - 0xDFFF)
+            if (byte == 0xE0 && (b1 < 0xA0 || b1 > 0xBF))
+            {
+                in.remove_prefix(1);
+                return U'\uFFFD';
+            }
+            if (byte == 0xED && (b1 < 0x80 || b1 > 0x9F))
+            {
+                in.remove_prefix(1);
+                return U'\uFFFD';
+            }
+            if ((b1 & 0xC0) != 0x80)
+            {
+                in.remove_prefix(1);
+                return U'\uFFFD';
+            }
+            if (in.size() < 3 || (static_cast<uint8_t>(in[2]) & 0xC0) != 0x80)
+            {
+                in.remove_prefix(2);
+                return U'\uFFFD';
+            }
+
             char32_t cp = static_cast<char32_t>((static_cast<uint32_t>(byte) & 0x0Fu) << 12);
-            cp |= static_cast<char32_t>((static_cast<uint32_t>(static_cast<uint8_t>(in[1])) & 0x3Fu) << 6);
+            cp |= static_cast<char32_t>((static_cast<uint32_t>(b1) & 0x3Fu) << 6);
             cp |= static_cast<char32_t>(static_cast<uint32_t>(static_cast<uint8_t>(in[2])) & 0x3Fu);
             in.remove_prefix(3);
             return cp;
         }
-        else
+
+        // 4-byte sequence (0xF0 - 0xF4)
+        if (byte <= 0xF4)
         {
-            if (in.size() < 4) { in = {}; return U'\uFFFD'; }
+            if (in.size() < 2)
+            {
+                in.remove_prefix(1);
+                return U'\uFFFD';
+            }
+            uint8_t b1 = static_cast<uint8_t>(in[1]);
+            // Disallow overlong (< 0x10000) and codepoints > 0x10FFFF
+            if (byte == 0xF0 && (b1 < 0x90 || b1 > 0xBF))
+            {
+                in.remove_prefix(1);
+                return U'\uFFFD';
+            }
+            if (byte == 0xF4 && (b1 < 0x80 || b1 > 0x8F))
+            {
+                in.remove_prefix(1);
+                return U'\uFFFD';
+            }
+            if ((b1 & 0xC0) != 0x80)
+            {
+                in.remove_prefix(1);
+                return U'\uFFFD';
+            }
+            if (in.size() < 3 || (static_cast<uint8_t>(in[2]) & 0xC0) != 0x80)
+            {
+                in.remove_prefix(2);
+                return U'\uFFFD';
+            }
+            if (in.size() < 4 || (static_cast<uint8_t>(in[3]) & 0xC0) != 0x80)
+            {
+                in.remove_prefix(3);
+                return U'\uFFFD';
+            }
+
             char32_t cp = static_cast<char32_t>((static_cast<uint32_t>(byte) & 0x07u) << 18);
-            cp |= static_cast<char32_t>((static_cast<uint32_t>(static_cast<uint8_t>(in[1])) & 0x3Fu) << 12);
+            cp |= static_cast<char32_t>((static_cast<uint32_t>(b1) & 0x3Fu) << 12);
             cp |= static_cast<char32_t>((static_cast<uint32_t>(static_cast<uint8_t>(in[2])) & 0x3Fu) << 6);
             cp |= static_cast<char32_t>(static_cast<uint32_t>(static_cast<uint8_t>(in[3])) & 0x3Fu);
             in.remove_prefix(4);
             return cp;
         }
+
+        in.remove_prefix(1);
+        return U'\uFFFD';
     }
 
     char32_t next_codepoint(const char*& ptr, const char* end)

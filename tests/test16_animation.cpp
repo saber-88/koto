@@ -281,6 +281,5 @@ int main()
             .draw(frame, Area(5, 4, 38, 1));
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

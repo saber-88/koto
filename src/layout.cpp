@@ -1,150 +1,105 @@
 #include "koto/layout.hpp"
 #include <algorithm>
+#include <span>
 #include <vector>
+
+namespace
+{
+    auto split_1d(int origin, int total_size, int cross_origin, int cross_size, bool is_vertical,
+                  std::span<const koto::Constraint> constraints) -> koto::LayoutResult
+    {
+        koto::LayoutResult layout;
+        int fill_count = 0;
+        int used = 0;
+
+        for (const auto& c : constraints)
+        {
+            switch (c.type)
+            {
+                case koto::Constraint::Type::Fixed:
+                    used += c.value;
+                    break;
+                case koto::Constraint::Type::Fill:
+                    fill_count++;
+                    break;
+                case koto::Constraint::Type::Percent:
+                    used += (total_size * c.value) / 100;
+                    break;
+            }
+        }
+
+        int remaining = std::max(0, total_size - used);
+        int fill_size = (fill_count > 0) ? remaining / fill_count : 0;
+        int fill_remainder = (fill_count > 0) ? remaining % fill_count : 0;
+
+        int current_pos = origin;
+        int fill_idx = 0;
+
+        for (const auto& c : constraints)
+        {
+            int size = 0;
+            switch (c.type)
+            {
+                case koto::Constraint::Type::Fixed:
+                    size = c.value;
+                    break;
+                case koto::Constraint::Type::Fill:
+                    size = fill_size + (fill_idx < fill_remainder ? 1 : 0);
+                    fill_idx++;
+                    break;
+                case koto::Constraint::Type::Percent:
+                    size = (total_size * c.value) / 100;
+                    break;
+            }
+
+            int max_possible = std::max(0, (origin + total_size) - current_pos);
+            size = std::min(size, max_possible);
+
+            if (is_vertical)
+            {
+                layout.push_back(koto::Area{current_pos, cross_origin, cross_size, size});
+            }
+            else
+            {
+                layout.push_back(koto::Area{cross_origin, current_pos, size, cross_size});
+            }
+            current_pos += size;
+        }
+
+        return layout;
+    }
+}
 
 namespace koto
 {
-    auto Layout::vertical(Area area, const std::vector<Constraint>& constraints)
-        -> std::vector<Area>
+    auto Layout::vertical(Area area, std::span<const Constraint> constraints)
+        -> LayoutResult
     {
         if(!area.is_valid())
         {
-            return std::vector<Area>(constraints.size(),Area{area.row,area.col,0,0});
-        }
-        std::vector<Area> layout;
-        int fill_count = 0;
-        int used = 0;
-        
-        for (auto c: constraints)
-        {
-            switch (c.type) {
-                case Constraint::Type::Fixed :
-                {
-                    used += c.value;
-                    break;
-                    
-                }
-                case Constraint::Type::Fill :
-                {
-                    fill_count++;
-                    break;
-                }
-                case Constraint::Type::Percent :
-                {
-                    used += (area.height * c.value) / 100;
-                    break;
-                }
+            LayoutResult empty;
+            for (size_t i = 0; i < constraints.size(); ++i)
+            {
+                empty.push_back(Area{area.row, area.col, 0, 0});
             }
-
+            return empty;
         }
-        int remaining = std::max(0,area.height - used);
-        int fill_size = (fill_count > 0) ? remaining / fill_count : 0;
-        int fill_remainder = (fill_count > 0) ? remaining % fill_count : 0;
-
-        int current_row = area.row;
-        int fill_idx = 0;
-
-        for (auto c : constraints)
-        {
-            Area rect(current_row,area.col,area.width,area.height);
-            
-            switch (c.type) {
-                case Constraint::Type::Fixed :
-                {
-                    rect.height = c.value;
-                    break;
-                    
-                }
-                case Constraint::Type::Fill :
-                {
-                    rect.height = fill_size + (fill_idx < fill_remainder ? 1 : 0);
-                    fill_idx++;
-                    break;
-                }
-                case Constraint::Type::Percent :
-                {
-                    rect.height = ((area.height * c.value) / 100);
-                    break;
-                }
-            }
-            int max_possible_h = std::max(0, area.bottom() - current_row);
-            rect.height = std::min(rect.height, max_possible_h);
-            current_row += rect.height;
-            layout.emplace_back(rect);
-        }
-        return layout;
+        return split_1d(area.row, area.height, area.col, area.width, true, constraints);
     }
 
-    auto Layout::horizontal(Area area, const std::vector<Constraint>& constraints)
-        -> std::vector<Area>
+    auto Layout::horizontal(Area area, std::span<const Constraint> constraints)
+        -> LayoutResult
     {
         if(!area.is_valid())
         {
-            return std::vector<Area>(constraints.size(),Area{area.row,area.col,0,0});
-        }
-        std::vector<Area> layout;
-        int fill_count = 0;
-        int used = 0;
-        
-        for (auto c: constraints)
-        {
-            switch (c.type) {
-                case Constraint::Type::Fixed :
-                {
-                    used += c.value;
-                    break;
-                    
-                }
-                case Constraint::Type::Fill :
-                {
-                    fill_count++;
-                    break;
-                }
-                case Constraint::Type::Percent :
-                {
-                    used += (area.width * c.value) / 100;
-                    break;
-                }
+            LayoutResult empty;
+            for (size_t i = 0; i < constraints.size(); ++i)
+            {
+                empty.push_back(Area{area.row, area.col, 0, 0});
             }
-
+            return empty;
         }
-
-        int remaining = std::max(0,area.width - used);
-        int fill_size = (fill_count > 0) ? remaining / fill_count : 0;
-        int fill_remainder = (fill_count > 0) ? remaining % fill_count : 0;
-
-        int current_col = area.col;
-        int fill_idx = 0;
-
-        for (auto c : constraints)
-        {
-            Area rect(area.row,current_col,area.width,area.height);
-
-            switch (c.type) {
-                case Constraint::Type::Fixed :
-                {
-                    rect.width = c.value;
-                    break;
-                    
-                }
-                case Constraint::Type::Fill :
-                {   
-                    rect.width = fill_size + (fill_idx < fill_remainder ? 1 : 0);
-                    fill_idx++;
-                    break;
-                }
-                case Constraint::Type::Percent :
-                {
-                    rect.width = ((area.width * c.value) / 100);
-                    break;
-                }
-            }
-            int max_possible_w = std::max(0, area.right() - current_col);
-            rect.width = std::min(rect.width, max_possible_w);
-            current_col += rect.width;
-            layout.emplace_back(rect);
-        }
-        return layout;
+        return split_1d(area.col, area.width, area.row, area.height, false, constraints);
     }
 
     auto Layout::center(Area area, int width, int height) -> Area
@@ -162,8 +117,8 @@ namespace koto
     }
 
     auto Layout::grid(Area area, 
-                      const std::vector<Constraint>& row_constraints, 
-                      const std::vector<Constraint>& col_constraints) -> Grid
+                      std::span<const Constraint> row_constraints, 
+                      std::span<const Constraint> col_constraints) -> Grid
     {
         if (row_constraints.empty() || col_constraints.empty() || !area.is_valid())
         {

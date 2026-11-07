@@ -43,6 +43,12 @@ namespace koto
             Text& ellipsis();
             Text& overflow(TextOverflow o);
             Text& align(TextAlign a);
+            Text& bold(bool b = true);
+            Text& dim(bool d = true);
+            Text& italic(bool i = true);
+            Text& underline(bool u = true);
+            Text& reverse(bool r = true);
+            Text& attr(TextAttr a);
             void draw(Frame &frame, Area area) override;
             
         private:
@@ -51,6 +57,7 @@ namespace koto
             TextWrap m_text_wrap = TextWrap::None;
             std::string m_content = "";
             uint32_t m_fg = COLOR_DEFAULT, m_bg = COLOR_DEFAULT;
+            uint8_t m_attrs = 0;
         
 
     };

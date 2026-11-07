@@ -24,7 +24,7 @@ namespace koto
             hash ^= static_cast<uint8_t>(c);
             hash *= 0x01000193u;
         }
-        return hash;
+        return (hash == 0xFFFFFFFFu) ? 0xFFFFFFFEu : hash;
     }
 
     constexpr uint32_t fnv1a_32(uint64_t val, uint32_t seed = 0x811c9dc5u) noexcept
@@ -36,7 +36,7 @@ namespace koto
             hash ^= byte;
             hash *= 0x01000193u;
         }
-        return hash;
+        return (hash == 0xFFFFFFFFu) ? 0xFFFFFFFEu : hash;
     }
 
     // =========================================================================

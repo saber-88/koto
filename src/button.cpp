@@ -172,7 +172,14 @@ namespace koto
                         }
                         return false;
                     },
-                    .handle_mouse = nullptr,
+                    .handle_mouse = [cb = m_on_click](const MouseEvent& m) {
+                        if (m.is_left_press())
+                        {
+                            cb();
+                            return true;
+                        }
+                        return false;
+                    },
                     .on_focus = nullptr,
                     .on_blur = nullptr
                 };

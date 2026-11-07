@@ -1,10 +1,12 @@
 #include "koto/event.hpp"
 #include "koto/utf8.hpp"
+#include <algorithm>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <poll.h>
+#include <string>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -48,7 +50,7 @@ namespace koto
         int btn = 0;
         while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9')
         {
-            btn = btn * 10 + (sv[i] - '0');
+            if (btn < 100000) btn = btn * 10 + (sv[i] - '0');
             i++;
         }
         if (i >= sv.size() || sv[i] != ';') return std::nullopt;
@@ -57,7 +59,7 @@ namespace koto
         int col = 0;
         while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9')
         {
-            col = col * 10 + (sv[i] - '0');
+            if (col < 100000) col = col * 10 + (sv[i] - '0');
             i++;
         }
         if (i >= sv.size() || sv[i] != ';') return std::nullopt;
@@ -66,30 +68,32 @@ namespace koto
         int row = 0;
         while (i < sv.size() && sv[i] >= '0' && sv[i] <= '9')
         {
-            row = row * 10 + (sv[i] - '0');
+            if (row < 100000) row = row * 10 + (sv[i] - '0');
             i++;
         }
 
+        bool shift  = (btn & 4) != 0;
+        bool alt    = (btn & 8) != 0;
+        bool ctrl   = (btn & 16) != 0;
+        bool motion = (btn & 32) != 0;
+
+        int base_btn = btn & ~(4 | 8 | 16 | 32);
+
         MouseButton button = MouseButton::None;
-        if (btn == 64) button = MouseButton::WheelUp;
-        else if (btn == 65) button = MouseButton::WheelDown;
-        else
-        {
-            int raw_btn = btn & 3;
-            if (raw_btn == 0) button = MouseButton::Left;
-            else if (raw_btn == 1) button = MouseButton::Middle;
-            else if (raw_btn == 2) button = MouseButton::Right;
-        }
+        if (base_btn == 64)      button = MouseButton::WheelUp;
+        else if (base_btn == 65) button = MouseButton::WheelDown;
+        else if (base_btn == 66) button = MouseButton::WheelLeft;
+        else if (base_btn == 67) button = MouseButton::WheelRight;
+        else if (base_btn == 0)  button = MouseButton::Left;
+        else if (base_btn == 1)  button = MouseButton::Middle;
+        else if (base_btn == 2)  button = MouseButton::Right;
+        else                     button = MouseButton::None;
 
         MouseAction action = (term == 'm') ? MouseAction::Release : MouseAction::Press;
-        if ((btn & 32) != 0 && term == 'M')
+        if (motion && term == 'M')
         {
             action = MouseAction::Move;
         }
-
-        bool shift = (btn & 4) != 0;
-        bool alt = (btn & 8) != 0;
-        bool ctrl = (btn & 16) != 0;
 
         return MouseEvent{
             .row = std::max(0, row - 1),
@@ -141,7 +145,7 @@ namespace koto
         bool has_p1 = false;
         while (i < len - 1 && sv[i] >= '0' && sv[i] <= '9')
         {
-            p1 = p1 * 10 + (sv[i] - '0');
+            if (p1 < 100000) p1 = p1 * 10 + (sv[i] - '0');
             has_p1 = true;
             i++;
         }
@@ -161,7 +165,7 @@ namespace koto
             i++;
             while (i < len - 1 && sv[i] >= '0' && sv[i] <= '9')
             {
-                p2 = p2 * 10 + (sv[i] - '0');
+                if (p2 < 100000) p2 = p2 * 10 + (sv[i] - '0');
                 has_p2 = true;
                 i++;
             }
@@ -173,7 +177,7 @@ namespace koto
                 int ev = 0;
                 while (i < len - 1 && sv[i] >= '0' && sv[i] <= '9')
                 {
-                    ev = ev * 10 + (sv[i] - '0');
+                    if (ev < 100000) ev = ev * 10 + (sv[i] - '0');
                     i++;
                 }
                 if (ev > 0)
@@ -336,23 +340,34 @@ namespace koto
         return std::nullopt;
     }
 
-    static auto parse_event_internal(std::string_view& in) -> Event
+    enum class ParseStatus
+    {
+        Complete,
+        Incomplete,
+        Invalid
+    };
+
+    struct ParseResult
+    {
+        ParseStatus status = ParseStatus::Invalid;
+        Event event = TickEvent{};
+        size_t consumed = 0;
+    };
+
+    static auto parse_step(std::string_view in) -> ParseResult
     {
         if (in.empty())
         {
-            return TickEvent{};
+            return ParseResult{ParseStatus::Complete, TickEvent{}, 0};
         }
 
-        // Bracketed Paste Mode: "\033[200~" ... "\033[201~"
+        // 1. Bracketed Paste Mode: "\033[200~" ... "\033[201~"
         if (in.starts_with("\033[200~"))
         {
             size_t end_idx = in.find("\033[201~");
             if (end_idx != std::string_view::npos)
             {
                 std::string_view raw = in.substr(6, end_idx - 6);
-                in.remove_prefix(end_idx + 6);
-
-                // Normalize CRLF and CR to LF
                 std::string text;
                 text.reserve(raw.size());
                 for (size_t i = 0; i < raw.size(); ++i)
@@ -361,7 +376,7 @@ namespace koto
                     {
                         if (i + 1 < raw.size() && raw[i + 1] == '\n')
                         {
-                            continue; // skip '\r' before '\n'
+                            continue;
                         }
                         text.push_back('\n');
                     }
@@ -370,20 +385,19 @@ namespace koto
                         text.push_back(raw[i]);
                     }
                 }
-                return PasteEvent{std::move(text)};
+                return ParseResult{ParseStatus::Complete, PasteEvent{std::move(text)}, end_idx + 6};
             }
             // Terminator hasn't arrived yet
-            return TickEvent{};
+            return ParseResult{ParseStatus::Incomplete, TickEvent{}, 0};
         }
 
-        // Escape sequences starting with \033
+        // 2. Escape sequences starting with \033
         if (in[0] == '\033')
         {
-            // Standalone Escape
+            // Standalone Escape prefix
             if (in.size() == 1)
             {
-                in.remove_prefix(1);
-                return KeyEvent{static_cast<uint32_t>(Key::Escape)};
+                return ParseResult{ParseStatus::Incomplete, TickEvent{}, 0};
             }
 
             // CSI sequence: "\033[" ... [0x40 - 0x7e]
@@ -395,166 +409,221 @@ namespace koto
                     size_t i = 3;
                     while (i < in.size() && in[i] != 'M' && in[i] != 'm')
                     {
+                        if ((in[i] < '0' || in[i] > '9') && in[i] != ';')
+                        {
+                            return ParseResult{ParseStatus::Invalid, TickEvent{}, 1};
+                        }
                         i++;
                     }
                     if (i < in.size())
                     {
                         size_t mouse_len = i + 1;
-                        std::string_view mouse_str = in.substr(0, mouse_len);
-                        in.remove_prefix(mouse_len);
-                        if (auto me = parse_sgr_mouse(mouse_str))
+                        if (auto me = parse_sgr_mouse(in.substr(0, mouse_len)))
                         {
-                            return *me;
+                            return ParseResult{ParseStatus::Complete, *me, mouse_len};
                         }
-                        return TickEvent{};
+                        return ParseResult{ParseStatus::Invalid, TickEvent{}, mouse_len};
                     }
-                    // Incomplete mouse sequence in buffer
-                    return TickEvent{};
+                    if (in.size() > 64)
+                    {
+                        return ParseResult{ParseStatus::Invalid, TickEvent{}, 1};
+                    }
+                    return ParseResult{ParseStatus::Incomplete, TickEvent{}, 0};
                 }
 
+                // General CSI: parameter bytes 0x20..0x3F, final byte 0x40..0x7E
                 size_t i = 2;
                 while (i < in.size() &&
-                       (static_cast<unsigned char>(in[i]) < 0x40 ||
-                        static_cast<unsigned char>(in[i]) > 0x7e))
+                       static_cast<unsigned char>(in[i]) >= 0x20 &&
+                       static_cast<unsigned char>(in[i]) <= 0x3F)
                 {
                     i++;
                 }
 
                 if (i < in.size())
                 {
-                    size_t csi_len = i + 1;
-                    std::string_view csi_str = in.substr(0, csi_len);
-                    in.remove_prefix(csi_len);
-                    if (auto ke = parse_csi(csi_str))
+                    unsigned char term = static_cast<unsigned char>(in[i]);
+                    if (term >= 0x40 && term <= 0x7E)
                     {
-                        return *ke;
+                        size_t csi_len = i + 1;
+                        if (in.substr(0, csi_len) == "\033[200~")
+                        {
+                            // Incomplete bracketed paste body
+                            return ParseResult{ParseStatus::Incomplete, TickEvent{}, 0};
+                        }
+                        if (auto ke = parse_csi(in.substr(0, csi_len)))
+                        {
+                            return ParseResult{ParseStatus::Complete, *ke, csi_len};
+                        }
+                        return ParseResult{ParseStatus::Complete, TickEvent{}, csi_len};
                     }
-                    return TickEvent{};
+                    return ParseResult{ParseStatus::Invalid, TickEvent{}, 1};
                 }
-                // Incomplete CSI sequence in buffer
-                return TickEvent{};
+
+                if (in.size() > 64)
+                {
+                    return ParseResult{ParseStatus::Invalid, TickEvent{}, 1};
+                }
+                return ParseResult{ParseStatus::Incomplete, TickEvent{}, 0};
             }
 
             // SS3 sequence: "\033O" + char
             if (in[1] == 'O')
             {
-                if (in.size() >= 3)
+                if (in.size() < 3)
                 {
-                    std::string_view ss3_str = in.substr(0, 3);
-                    in.remove_prefix(3);
-                    if (auto ke = parse_ss3(ss3_str))
-                    {
-                        return *ke;
-                    }
-                    return TickEvent{};
+                    return ParseResult{ParseStatus::Incomplete, TickEvent{}, 0};
                 }
-                return TickEvent{};
+                if (auto ke = parse_ss3(in.substr(0, 3)))
+                {
+                    return ParseResult{ParseStatus::Complete, *ke, 3};
+                }
+                return ParseResult{ParseStatus::Complete, TickEvent{}, 3};
+            }
+
+            // OSC sequence: "\033]" ... BEL (0x07) or ST ("\033\\")
+            if (in[1] == ']')
+            {
+                size_t bell = in.find('\007');
+                size_t st = in.find("\033\\");
+                size_t end_osc = std::min(bell, st);
+                if (end_osc != std::string_view::npos)
+                {
+                    size_t osc_len = (end_osc == bell) ? bell + 1 : st + 2;
+                    return ParseResult{ParseStatus::Complete, TickEvent{}, osc_len};
+                }
+                if (in.size() > 256)
+                {
+                    return ParseResult{ParseStatus::Invalid, TickEvent{}, 1};
+                }
+                return ParseResult{ParseStatus::Incomplete, TickEvent{}, 0};
             }
 
             // Alt + single-byte ASCII
             if (static_cast<unsigned char>(in[1]) < 0x80)
             {
                 char c = in[1];
-                in.remove_prefix(2);
-
-                if (c == '\r' || c == '\n') return KeyEvent{static_cast<uint32_t>(Key::Enter), false, false, true, false};
-                if (c == '\t')             return KeyEvent{static_cast<uint32_t>(Key::Tab), false, false, true, false};
-                if (c == 127 || c == 8)    return KeyEvent{static_cast<uint32_t>(Key::Backspace), false, false, true, false};
-                if (c == '\033')           return KeyEvent{static_cast<uint32_t>(Key::Escape), false, false, true, false};
-                if (c >= 'A' && c <= 'Z')
-                {
-                    return KeyEvent{static_cast<uint32_t>(c), false, true, true, false};
-                }
-                if (c >= 32)
-                {
-                    return KeyEvent{static_cast<uint32_t>(c), false, false, true, false};
-                }
-                return TickEvent{};
+                if (c == '\r' || c == '\n') return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(Key::Enter), false, false, true, false}, 2};
+                if (c == '\t')             return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(Key::Tab), false, false, true, false}, 2};
+                if (c == 127 || c == 8)    return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(Key::Backspace), false, false, true, false}, 2};
+                if (c == '\033')           return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(Key::Escape), false, false, true, false}, 2};
+                if (c >= 'A' && c <= 'Z')  return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(c), false, true, true, false}, 2};
+                if (c >= 32)               return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(c), false, false, true, false}, 2};
+                return ParseResult{ParseStatus::Complete, TickEvent{}, 2};
             }
 
             // Alt + multi-byte UTF-8
+            unsigned char lead = static_cast<unsigned char>(in[1]);
+            size_t expected_utf8 = 1;
+            if ((lead & 0xE0) == 0xC0) expected_utf8 = 2;
+            else if ((lead & 0xF0) == 0xE0) expected_utf8 = 3;
+            else if ((lead & 0xF8) == 0xF0) expected_utf8 = 4;
+            else
+            {
+                return ParseResult{ParseStatus::Invalid, TickEvent{}, 1};
+            }
+
+            if (in.size() < 1 + expected_utf8)
+            {
+                return ParseResult{ParseStatus::Incomplete, TickEvent{}, 0};
+            }
+
             std::string_view alt_body = in.substr(1);
             size_t before_len = alt_body.size();
             char32_t cp = next_codepoint(alt_body);
-            if (cp != 0)
+            if (cp != 0 && cp != U'\uFFFD')
             {
                 size_t utf8_len = before_len - alt_body.size();
-                in.remove_prefix(1 + utf8_len);
-                return KeyEvent{static_cast<uint32_t>(cp), false, false, true, false};
+                return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(cp), false, false, true, false}, 1 + utf8_len};
             }
 
-            in.remove_prefix(1);
-            return TickEvent{};
+            return ParseResult{ParseStatus::Invalid, TickEvent{}, 1};
         }
 
-        // Tab
+        // 3. Tab
         if (in[0] == '\t')
         {
-            in.remove_prefix(1);
-            return KeyEvent{static_cast<uint32_t>(Key::Tab)};
+            return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(Key::Tab)}, 1};
         }
 
-        // Enter: \r\n, \r, \n
+        // 4. Enter: \r\n, \r, \n
         if (in[0] == '\r' || in[0] == '\n')
         {
             if (in.size() >= 2 && in[0] == '\r' && in[1] == '\n')
             {
-                in.remove_prefix(2);
+                return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(Key::Enter)}, 2};
             }
-            else
-            {
-                in.remove_prefix(1);
-            }
-            return KeyEvent{static_cast<uint32_t>(Key::Enter)};
+            return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(Key::Enter)}, 1};
         }
 
-        // Backspace
+        // 5. Backspace
         if (in[0] == 127 || in[0] == 8)
         {
-            in.remove_prefix(1);
-            return KeyEvent{static_cast<uint32_t>(Key::Backspace)};
+            return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(Key::Backspace)}, 1};
         }
 
-        // Ctrl+Space
+        // 6. Ctrl+Space
         if (in[0] == 0)
         {
-            in.remove_prefix(1);
-            return KeyEvent{static_cast<uint32_t>(' '), true, false, false, false};
+            return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(' '), true, false, false, false}, 1};
         }
 
-        // Ctrl+A through Ctrl+Z (1..26)
+        // 7. Ctrl+A through Ctrl+Z (1..26)
         if (static_cast<unsigned char>(in[0]) >= 1 && static_cast<unsigned char>(in[0]) <= 26)
         {
             char c = in[0];
-            in.remove_prefix(1);
-            return KeyEvent{static_cast<uint32_t>('A' + c - 1), true, false, false, false};
+            return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>('A' + c - 1), true, false, false, false}, 1};
         }
 
-        // Regular printable ASCII
+        // 8. Regular printable ASCII
         if (static_cast<unsigned char>(in[0]) >= 32 && static_cast<unsigned char>(in[0]) < 127)
         {
             char c = in[0];
-            in.remove_prefix(1);
             bool shift = (c >= 'A' && c <= 'Z');
-            return KeyEvent{static_cast<uint32_t>(c), false, shift, false, false};
+            return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(c), false, shift, false, false}, 1};
         }
 
-        // Multi-byte UTF-8
-        char32_t cp = next_codepoint(in);
-        if (cp != 0)
+        // 9. Multi-byte UTF-8
+        unsigned char lead = static_cast<unsigned char>(in[0]);
+        size_t expected_utf8 = 1;
+        if ((lead & 0xE0) == 0xC0) expected_utf8 = 2;
+        else if ((lead & 0xF0) == 0xE0) expected_utf8 = 3;
+        else if ((lead & 0xF8) == 0xF0) expected_utf8 = 4;
+        else
         {
-            return KeyEvent{static_cast<uint32_t>(cp)};
+            return ParseResult{ParseStatus::Invalid, TickEvent{}, 1};
         }
 
-        // Unparseable byte fallback: skip 1 byte
-        in.remove_prefix(1);
-        return TickEvent{};
+        if (in.size() < expected_utf8)
+        {
+            return ParseResult{ParseStatus::Incomplete, TickEvent{}, 0};
+        }
+
+        std::string_view sv = in;
+        size_t before_len = sv.size();
+        char32_t cp = next_codepoint(sv);
+        if (cp != 0 && cp != U'\uFFFD')
+        {
+            size_t consumed = before_len - sv.size();
+            return ParseResult{ParseStatus::Complete, KeyEvent{static_cast<uint32_t>(cp)}, consumed};
+        }
+
+        return ParseResult{ParseStatus::Invalid, TickEvent{}, 1};
     }
 
     auto EventLoop::parse(std::string_view bytes) -> Event
     {
-        std::string_view sv = bytes;
-        return parse_event_internal(sv);
+        if (bytes.empty()) return TickEvent{};
+        if (bytes.size() == 1 && bytes[0] == '\033')
+        {
+            return KeyEvent{static_cast<uint32_t>(Key::Escape)};
+        }
+        ParseResult res = parse_step(bytes);
+        if (res.status == ParseStatus::Complete)
+        {
+            return res.event;
+        }
+        return TickEvent{};
     }
 
     auto EventLoop::parse_stdin() -> Event
@@ -564,50 +633,49 @@ namespace koto
             return TickEvent{};
         }
 
-        // If a solitary Escape arrives, wait up to 25ms to see if subsequent sequence bytes arrive
-        if (m_pending_input.size() == 1 && m_pending_input[0] == '\033')
+        ParseResult res = parse_step(m_pending_input);
+
+        if (res.status == ParseStatus::Complete)
         {
-            struct pollfd pfd = {STDIN_FILENO, POLLIN, 0};
-            if (::poll(&pfd, 1, 25) > 0 && (pfd.revents & POLLIN))
-            {
-                char extra[256] = {};
-                ssize_t extra_n = read(STDIN_FILENO, extra, sizeof(extra));
-                if (extra_n > 0)
-                {
-                    m_pending_input.append(extra, static_cast<size_t>(extra_n));
-                }
-            }
+            m_pending_input.erase(0, res.consumed);
+            return res.event;
         }
 
-        // If bracketed paste has begun but hasn't received terminator yet, read until \033[201~
-        if (m_pending_input.starts_with("\033[200~") && m_pending_input.find("\033[201~") == std::string::npos)
+        if (res.status == ParseStatus::Incomplete)
         {
-            while (m_pending_input.find("\033[201~") == std::string::npos)
+            // If solitary ESC, wait up to 35ms on stdin to see if a sequence follows
+            if (m_pending_input.size() == 1 && m_pending_input[0] == '\033')
             {
-                struct pollfd pfd = {STDIN_FILENO, POLLIN, 0};
-                if (::poll(&pfd, 1, 50) <= 0 || !(pfd.revents & POLLIN))
+                struct pollfd pfd = {m_eof ? -1 : STDIN_FILENO, POLLIN, 0};
+                if (!m_eof && ::poll(&pfd, 1, 35) > 0 && (pfd.revents & POLLIN))
                 {
-                    break;
+                    char extra[256] = {};
+                    ssize_t extra_n = read(STDIN_FILENO, extra, sizeof(extra));
+                    if (extra_n > 0)
+                    {
+                        m_pending_input.append(extra, static_cast<size_t>(extra_n));
+                        return parse_stdin();
+                    }
+                    else if (extra_n == 0)
+                    {
+                        m_eof = true;
+                    }
                 }
-                char chunk[512] = {};
-                ssize_t chunk_n = read(STDIN_FILENO, chunk, sizeof(chunk));
-                if (chunk_n <= 0) break;
-                m_pending_input.append(chunk, static_cast<size_t>(chunk_n));
+
+                // Timed out or EOF: standalone Escape key!
+                m_pending_input.clear();
+                return KeyEvent{static_cast<uint32_t>(Key::Escape)};
             }
+
+            // Incomplete multi-byte sequence (CSI, mouse, paste, UTF-8):
+            // Return TickEvent{} and KEEP m_pending_input INTACT!
+            return TickEvent{};
         }
 
-        std::string_view sv = m_pending_input;
-        Event ev = parse_event_internal(sv);
-        size_t consumed = m_pending_input.size() - sv.size();
-        if (consumed > 0)
-        {
-            m_pending_input.erase(0, consumed);
-        }
-        else
-        {
-            m_pending_input.erase(0, 1);
-        }
-        return ev;
+        // Invalid sequence / malformed byte: drop bad byte
+        size_t to_drop = res.consumed > 0 ? res.consumed : 1;
+        m_pending_input.erase(0, to_drop);
+        return TickEvent{};
     }
     auto EventLoop::on_sigwinch([[maybe_unused]] int signum) -> void
     {
@@ -631,24 +699,52 @@ namespace koto
 
     auto EventLoop::poll(std::int32_t timeout_ms) -> Event
     {
-        // 1. If there are pending unconsumed bytes from a previous read (e.g. mouse release or rapid typing),
-        // parse and return immediately WITHOUT blocking on read() or polling!
+        // 1. If there are pending unconsumed bytes from a previous read:
         if (!m_pending_input.empty())
         {
-            return parse_stdin();
+            ParseResult res = parse_step(m_pending_input);
+            if (res.status == ParseStatus::Complete)
+            {
+                m_pending_input.erase(0, res.consumed);
+                return res.event;
+            }
+            if (res.status == ParseStatus::Invalid)
+            {
+                size_t to_drop = res.consumed > 0 ? res.consumed : 1;
+                m_pending_input.erase(0, to_drop);
+                return poll(0);
+            }
+            // Incomplete: fall through to poll() below to wait for stdin / self-pipe!
         }
 
         // 2. Wait for stdin or self-pipe (SIGWINCH resize / async wakeup)
         struct pollfd pfds[2] =
         {
-            {STDIN_FILENO,    POLLIN, 0},
-            {m_pipe_fds[0],   POLLIN, 0},
+            {m_eof ? -1 : STDIN_FILENO, POLLIN, 0},
+            {m_pipe_fds[0],             POLLIN, 0},
         };
 
-        int ret = ::poll(pfds, 2, timeout_ms);
+        int eff_timeout = timeout_ms;
+        if (!m_pending_input.empty() && m_pending_input.size() == 1 && m_pending_input[0] == '\033')
+        {
+            if (eff_timeout < 0 || eff_timeout > 35)
+            {
+                eff_timeout = 35;
+            }
+        }
+
+        int ret = ::poll(pfds, 2, eff_timeout);
 
         if (ret <= 0)
         {
+            if (!m_pending_input.empty())
+            {
+                if (m_pending_input.size() == 1 && m_pending_input[0] == '\033')
+                {
+                    m_pending_input.clear();
+                    return KeyEvent{static_cast<uint32_t>(Key::Escape)};
+                }
+            }
             return TickEvent{};
         }
 
@@ -676,7 +772,7 @@ namespace koto
             return TickEvent{};
         }
 
-        if (pfds[0].revents & POLLIN)
+        if (!m_eof && (pfds[0].revents & (POLLIN | POLLHUP | POLLERR)))
         {
             // Drain all available bytes currently in OS kernel stdin buffer
             int available = 0;
@@ -687,7 +783,11 @@ namespace koto
                 {
                     size_t to_read = std::min(sizeof(buf), static_cast<size_t>(available));
                     ssize_t n = read(STDIN_FILENO, buf, to_read);
-                    if (n <= 0) break;
+                    if (n <= 0)
+                    {
+                        if (n == 0) m_eof = true;
+                        break;
+                    }
                     m_pending_input.append(buf, static_cast<size_t>(n));
                     available -= static_cast<int>(n);
                 }
@@ -699,6 +799,10 @@ namespace koto
                 if (n > 0)
                 {
                     m_pending_input.append(buf, static_cast<size_t>(n));
+                }
+                else if (n == 0)
+                {
+                    m_eof = true;
                 }
             }
 

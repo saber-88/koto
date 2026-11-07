@@ -240,6 +240,5 @@ int main()
         Text(cursor_info).fg(Color::Gray).bg(Color::Rgb(20, 20, 24)).draw(frame, footer_area);
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

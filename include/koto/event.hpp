@@ -47,24 +47,29 @@ namespace koto
         bool meta = false;
 
         bool is(Key k) const {
-            if (ch == static_cast<uint32_t>(k)) return true;
             if (k == Key::BackTab) return (ch == static_cast<uint32_t>(Key::Tab) && shift) || (ch == static_cast<uint32_t>(Key::BackTab));
-            if (k == Key::ShiftUp) return ch == static_cast<uint32_t>(Key::Up) && shift;
-            if (k == Key::ShiftDown) return ch == static_cast<uint32_t>(Key::Down) && shift;
-            if (k == Key::ShiftLeft) return ch == static_cast<uint32_t>(Key::Left) && shift;
-            if (k == Key::ShiftRight) return ch == static_cast<uint32_t>(Key::Right) && shift;
-            if (k == Key::CtrlUp) return ch == static_cast<uint32_t>(Key::Up) && ctrl;
-            if (k == Key::CtrlDown) return ch == static_cast<uint32_t>(Key::Down) && ctrl;
-            if (k == Key::CtrlLeft) return ch == static_cast<uint32_t>(Key::Left) && ctrl;
-            if (k == Key::CtrlRight) return ch == static_cast<uint32_t>(Key::Right) && ctrl;
-            if (k == Key::AltUp) return ch == static_cast<uint32_t>(Key::Up) && alt;
-            if (k == Key::AltDown) return ch == static_cast<uint32_t>(Key::Down) && alt;
-            if (k == Key::AltLeft) return ch == static_cast<uint32_t>(Key::Left) && alt;
-            if (k == Key::AltRight) return ch == static_cast<uint32_t>(Key::Right) && alt;
-            return false;
+            if (k == Key::ShiftUp) return (ch == static_cast<uint32_t>(Key::Up) && shift) || (ch == static_cast<uint32_t>(Key::ShiftUp));
+            if (k == Key::ShiftDown) return (ch == static_cast<uint32_t>(Key::Down) && shift) || (ch == static_cast<uint32_t>(Key::ShiftDown));
+            if (k == Key::ShiftLeft) return (ch == static_cast<uint32_t>(Key::Left) && shift) || (ch == static_cast<uint32_t>(Key::ShiftLeft));
+            if (k == Key::ShiftRight) return (ch == static_cast<uint32_t>(Key::Right) && shift) || (ch == static_cast<uint32_t>(Key::ShiftRight));
+            if (k == Key::CtrlUp) return (ch == static_cast<uint32_t>(Key::Up) && ctrl) || (ch == static_cast<uint32_t>(Key::CtrlUp));
+            if (k == Key::CtrlDown) return (ch == static_cast<uint32_t>(Key::Down) && ctrl) || (ch == static_cast<uint32_t>(Key::CtrlDown));
+            if (k == Key::CtrlLeft) return (ch == static_cast<uint32_t>(Key::Left) && ctrl) || (ch == static_cast<uint32_t>(Key::CtrlLeft));
+            if (k == Key::CtrlRight) return (ch == static_cast<uint32_t>(Key::Right) && ctrl) || (ch == static_cast<uint32_t>(Key::CtrlRight));
+            if (k == Key::AltUp) return (ch == static_cast<uint32_t>(Key::Up) && alt) || (ch == static_cast<uint32_t>(Key::AltUp));
+            if (k == Key::AltDown) return (ch == static_cast<uint32_t>(Key::Down) && alt) || (ch == static_cast<uint32_t>(Key::AltDown));
+            if (k == Key::AltLeft) return (ch == static_cast<uint32_t>(Key::Left) && alt) || (ch == static_cast<uint32_t>(Key::AltLeft));
+            if (k == Key::AltRight) return (ch == static_cast<uint32_t>(Key::Right) && alt) || (ch == static_cast<uint32_t>(Key::AltRight));
+
+            // Plain arrow navigation: modifiers must be clean
+            if (k == Key::Up || k == Key::Down || k == Key::Left || k == Key::Right) {
+                return ch == static_cast<uint32_t>(k) && !shift && !ctrl && !alt;
+            }
+
+            return ch == static_cast<uint32_t>(k);
         }
 
-        bool is_char() const { return ch < 0x80000000 && ch >= 32; }
+        bool is_char() const { return (ch >= 32 && ch < 127) || (ch >= 160 && ch < 0x80000000); }
     };
 
     struct ResizeEvent
@@ -88,6 +93,8 @@ namespace koto
         Right = 2,
         WheelUp = 64,
         WheelDown = 65,
+        WheelLeft = 66,
+        WheelRight = 67,
         None = 255
     };
 
@@ -116,6 +123,8 @@ namespace koto
         constexpr bool is_right_press() const noexcept { return is_press() && button == MouseButton::Right; }
         constexpr bool is_wheel_up() const noexcept { return button == MouseButton::WheelUp; }
         constexpr bool is_wheel_down() const noexcept { return button == MouseButton::WheelDown; }
+        constexpr bool is_wheel_left() const noexcept { return button == MouseButton::WheelLeft; }
+        constexpr bool is_wheel_right() const noexcept { return button == MouseButton::WheelRight; }
     };
 
     struct Event : std::variant<KeyEvent, ResizeEvent, TickEvent, PasteEvent, MouseEvent>
@@ -152,10 +161,14 @@ namespace koto
 
             auto poll(std::int32_t ms = 16) -> Event;
             bool has_pending() const noexcept { return !m_pending_input.empty(); }
+            bool is_eof() const noexcept { return m_eof; }
 
             // Direct buffer parser (useful for testing or feeding synthetic input streams)
             static auto parse(std::string_view bytes) -> Event;
             static auto on_sigwinch(int) -> void;
+
+            // Feed raw bytes into pending input buffer (for streaming input / tests)
+            void feed(std::string_view bytes) { m_pending_input.append(bytes); }
 
             // Thread-safe async wakeup: unblocks poll() from any background worker thread
             void wakeup() noexcept;
@@ -166,6 +179,7 @@ namespace koto
             std::string m_pending_input;
             struct sigaction m_old_sa{};
             int m_pipe_fds[2] = {-1, -1};
+            bool m_eof = false;
 
             auto on_resize() -> Event;
             auto parse_stdin() -> Event;

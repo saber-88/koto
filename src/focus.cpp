@@ -64,6 +64,12 @@ namespace koto
                 m_targets[i].on_focus = std::move(target.on_focus);
                 m_targets[i].on_blur = std::move(target.on_blur);
 
+                // Re-sync focus state (C-35)
+                if (m_targets[i].set_focus)
+                {
+                    m_targets[i].set_focus(i == m_active_index);
+                }
+
                 // If inside a modal scope and currently active target is outside the modal,
                 // activate this modal target!
                 if (!current_modal.is_none() && target.modal_scope == current_modal)
@@ -80,23 +86,16 @@ namespace koto
         }
 
         // 2. New target: if inside a modal and currently active target is outside the modal,
-        // activate this modal target immediately!
+        // activate this modal target immediately (respecting validator/observer) (C-36)!
         if (!current_modal.is_none() && target.modal_scope == current_modal)
         {
             bool active_is_in_modal = (m_active_index < m_targets.size() &&
                                        m_targets[m_active_index].modal_scope == current_modal);
             if (!active_is_in_modal)
             {
-                if (m_active_index < m_targets.size())
-                {
-                    auto& old_t = m_targets[m_active_index];
-                    if (old_t.set_focus) old_t.set_focus(false);
-                    if (old_t.on_blur) old_t.on_blur();
-                }
-                m_active_index = m_targets.size();
-                if (target.set_focus) target.set_focus(true);
-                if (target.on_focus) target.on_focus();
+                size_t new_idx = m_targets.size();
                 m_targets.push_back(std::move(target));
+                this->focus(new_idx);
                 return;
             }
         }
@@ -119,6 +118,18 @@ namespace koto
     {
         Id scoped = this->scoped_id(id);
         Id current_modal = this->active_modal_scope();
+
+        if (!on_mouse && on_key)
+        {
+            on_mouse = [key_fn = on_key](const MouseEvent& m) {
+                if (m.is_left_press())
+                {
+                    KeyEvent enter_key{static_cast<uint32_t>(Key::Enter)};
+                    return key_fn(enter_key);
+                }
+                return false;
+            };
+        }
 
         FocusTarget target{
             .id = scoped,
@@ -192,6 +203,12 @@ namespace koto
     bool FocusManager::focus(size_t index)
     {
         if (index >= m_targets.size())
+        {
+            return false;
+        }
+
+        Id current_modal = this->active_modal_scope();
+        if (!current_modal.is_none() && m_targets[index].modal_scope != current_modal)
         {
             return false;
         }
@@ -397,15 +414,15 @@ namespace koto
 
     bool FocusManager::handle_key(const KeyEvent& key)
     {
-        if (m_targets.empty())
-        {
-            return false;
-        }
-
         // 1. Run developer's custom FocusKeyInterceptor FIRST if registered!
         if (m_key_interceptor && m_key_interceptor(*this, key))
         {
             return true;
+        }
+
+        if (m_targets.empty())
+        {
+            return false;
         }
 
         // 2. Tab / Shift+Tab -> 1D ring navigation (always consistent and predictable)
@@ -519,19 +536,10 @@ namespace koto
                 if (mouse.action == MouseAction::Press && mouse.button == MouseButton::Left)
                 {
                     this->focus(i);
-                    bool sub_handled = false;
                     if (m_targets[i].handle_mouse)
                     {
-                        sub_handled = m_targets[i].handle_mouse(mouse);
+                        m_targets[i].handle_mouse(mouse);
                     }
-                    else if (m_targets[i].handle_key)
-                    {
-                        // If element has no mouse handler but has a key handler (e.g. Button with on_key callback),
-                        // simulate an Enter keypress so clicking the button triggers its action!
-                        KeyEvent enter_key{static_cast<uint32_t>(Key::Enter)};
-                        sub_handled = m_targets[i].handle_key(enter_key);
-                    }
-                    static_cast<void>(sub_handled);
                     return true;
                 }
 
@@ -578,7 +586,8 @@ namespace koto
     {
         if (mode == ScopeMode::Modal)
         {
-            m_saved_focus_stack.push_back(m_active_index);
+            Id saved_id = (m_active_index < m_targets.size()) ? m_targets[m_active_index].id : Id::none();
+            m_saved_focus_stack.push_back(saved_id);
             m_scope_stack.push_back(ScopeEntry{scope_id.value(), mode});
 
             // Automatically transfer focus to the first target inside this modal scope if already registered!
@@ -607,9 +616,12 @@ namespace koto
 
         if (mode == ScopeMode::Modal && !m_saved_focus_stack.empty())
         {
-            size_t restored_index = m_saved_focus_stack.back();
+            Id restored_id = m_saved_focus_stack.back();
             m_saved_focus_stack.pop_back();
-            this->focus(restored_index);
+            if (!restored_id.is_none())
+            {
+                this->focus_id(restored_id);
+            }
         }
     }
 

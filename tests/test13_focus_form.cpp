@@ -239,6 +239,5 @@ int main()
             .draw(frame, v_splits[3]);
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

@@ -140,12 +140,12 @@ namespace koto
         uint32_t border_color = m_focused ? m_focused_border_fg : m_fg;
         BorderStyle effective_style = (m_focused && m_has_focused_border_style) ? m_focused_border_style : m_style;
 
-        char32_t top_left;
-        char32_t top_right;
-        char32_t bottom_left;
-        char32_t bottom_right;
-        char32_t horizontal;
-        char32_t vertical;
+        char32_t top_left = U' ';
+        char32_t top_right = U' ';
+        char32_t bottom_left = U' ';
+        char32_t bottom_right = U' ';
+        char32_t horizontal = U' ';
+        char32_t vertical = U' ';
 
         switch (effective_style)
         {

@@ -22,6 +22,7 @@ namespace koto
         App& on_paste(std::function<void(const std::string&)> handler);
         App& on_mouse(std::function<void(const MouseEvent&)> handler);
         App& on_tick(std::function<void()> handler);
+        App& on_tick(std::function<void(double)> handler);
         App& on_render(std::function<void(Frame&)> handler);
 
         // Core focus integration
@@ -34,8 +35,8 @@ namespace koto
 
         void quit();
         void request_redraw() noexcept;
-        void run();
-        void run(std::function<void(Frame&)> render_function);
+        auto run() -> std::expected<void, TerminalErrorInfo>;
+        auto run(std::function<void(Frame&)> render_function) -> std::expected<void, TerminalErrorInfo>;
 
         // Screen geometry & hit-testing (abstracted away from Frame)
         Area area() const noexcept;
@@ -62,6 +63,7 @@ namespace koto
             std::function<void(const std::string&)> m_paste_handler = nullptr;
             std::function<void(const MouseEvent&)> m_mouse_handler = nullptr;
             std::function<void()> m_tick_handler = nullptr;
+            std::function<void(double)> m_tick_dt_handler = nullptr;
             std::function<void(Frame&)> m_render_handler = nullptr;
 
     };

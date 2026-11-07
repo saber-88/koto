@@ -138,6 +138,5 @@ int main()
             .draw(frame, footer_area);
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

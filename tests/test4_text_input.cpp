@@ -207,6 +207,5 @@ int main()
             .draw(frame, sections[6].inset(0, 1, 0, 0));
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

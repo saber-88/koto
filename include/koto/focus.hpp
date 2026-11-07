@@ -242,7 +242,7 @@ namespace koto
         std::vector<FocusTarget> m_targets;
         size_t m_active_index = 0;
         std::vector<ScopeEntry> m_scope_stack;
-        std::vector<size_t> m_saved_focus_stack;
+        std::vector<Id> m_saved_focus_stack;
 
         FocusNavPolicy m_policy = FocusNavPolicy::TabOnly;
         FocusKeyInterceptor m_key_interceptor = nullptr;

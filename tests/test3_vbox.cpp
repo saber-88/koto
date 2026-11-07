@@ -44,6 +44,5 @@ int main()
         vbox.draw(frame, area);
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

@@ -20,7 +20,7 @@ namespace koto
     m_term(&t), 
     m_rows(m_term->get_rows()),
     m_cols(m_term->get_cols()), 
-    m_front_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
+    m_front_buffer(static_cast<size_t>(m_cols * m_rows), Cell{U'\xFF'}),
     m_back_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
     m_hit_buffer(static_cast<size_t>(m_cols * m_rows), TAG_NONE)
     {}
@@ -29,7 +29,7 @@ namespace koto
     m_term(nullptr),
     m_rows(rows < 0 ? 0 : rows),
     m_cols(cols < 0 ? 0 : cols),
-    m_front_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
+    m_front_buffer(static_cast<size_t>(m_cols * m_rows), Cell{U'\xFF'}),
     m_back_buffer(static_cast<size_t>(m_cols * m_rows), Cell{}),
     m_hit_buffer(static_cast<size_t>(m_cols * m_rows), TAG_NONE)
     {}
@@ -70,7 +70,7 @@ namespace koto
 
         size_t idx = static_cast<size_t>(m_cols * row + col);
 
-
+        // 1. If this cell was a continuation of a previous wide char, clear its owner
         if (col > 0 && m_back_buffer[idx].continuation)
         {
             size_t owner = idx - 1;
@@ -78,6 +78,7 @@ namespace koto
             m_back_buffer[owner].width = 1;
         }
 
+        // 2. If this cell was previously a wide character head, clear its continuation cell
         if (m_back_buffer[idx].width == 2 && col + 1 < m_cols)
         {
             m_back_buffer[idx + 1] = Cell{};
@@ -86,19 +87,38 @@ namespace koto
         int w = codepoint_width(c.ch);
         if (w == 2 && col + 1 >= m_cols) { c.ch = U' '; w = 1; }
 
-        c.width = w;
-        if (w == 2)
+        // 3. If placing a wide character (width 2), it will overwrite idx and idx + 1:
+        // If idx + 1 was previously a wide char head, clear its continuation cell at idx + 2!
+        if (w == 2 && col + 1 < m_cols)
         {
+            if (m_back_buffer[idx + 1].width == 2 && col + 2 < m_cols)
+            {
+                m_back_buffer[idx + 2] = Cell{};
+            }
             m_back_buffer[idx + 1] = Cell{.continuation = true};
             if (!tag_id.is_none())
             {
                 m_hit_buffer[idx + 1] = static_cast<int>(tag_id.value());
             }
         }
+
+        c.width = w;
         m_back_buffer[idx] = c;
+
+        // 4. Update hit buffer and tag bounds
         if (!tag_id.is_none())
         {
             m_hit_buffer[idx] = static_cast<int>(tag_id.value());
+            Area cell_area{row, col, w, 1};
+            auto it = m_tag_bounds.find(tag_id.value());
+            if (it == m_tag_bounds.end())
+            {
+                m_tag_bounds[tag_id.value()] = cell_area;
+            }
+            else
+            {
+                it->second = it->second.union_with(cell_area);
+            }
         }
     }
 
@@ -161,25 +181,84 @@ namespace koto
 
     auto Frame::paint_cell(Cell c) -> void
     {
-
-        char buf[64] = {};
+        char buf[128] = {};
         int  offset  = 0;
+        ColorMode mode = m_term ? m_term->color_mode() : ColorMode::TrueColor;
+
+        // emit text attributes SGR when attributes change (C-28)
+        if (c.attrs != m_cur_attrs)
+        {
+            if ((m_cur_attrs & ~c.attrs) != 0)
+            {
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                   "\033[22;23;24;27;29m");
+                m_cur_attrs = 0;
+            }
+            if ((c.attrs & static_cast<uint8_t>(TextAttr::Bold)) && !(m_cur_attrs & static_cast<uint8_t>(TextAttr::Bold)))
+            {
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset), "\033[1m");
+            }
+            if ((c.attrs & static_cast<uint8_t>(TextAttr::Dim)) && !(m_cur_attrs & static_cast<uint8_t>(TextAttr::Dim)))
+            {
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset), "\033[2m");
+            }
+            if ((c.attrs & static_cast<uint8_t>(TextAttr::Italic)) && !(m_cur_attrs & static_cast<uint8_t>(TextAttr::Italic)))
+            {
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset), "\033[3m");
+            }
+            if ((c.attrs & static_cast<uint8_t>(TextAttr::Underline)) && !(m_cur_attrs & static_cast<uint8_t>(TextAttr::Underline)))
+            {
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset), "\033[4m");
+            }
+            if ((c.attrs & static_cast<uint8_t>(TextAttr::Reverse)) && !(m_cur_attrs & static_cast<uint8_t>(TextAttr::Reverse)))
+            {
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset), "\033[7m");
+            }
+            if ((c.attrs & static_cast<uint8_t>(TextAttr::Strike)) && !(m_cur_attrs & static_cast<uint8_t>(TextAttr::Strike)))
+            {
+                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset), "\033[9m");
+            }
+            m_cur_attrs = c.attrs;
+        }
 
         // only emit fg SGR when color actually changes
         if (c.fg != m_cur_fg)
         {
-            if (c.fg != COLOR_DEFAULT)
+            if (c.fg != COLOR_DEFAULT && mode != ColorMode::NoColor)
             {
-                uint8_t r = (c.fg >> 16) & 0xFF;
-                uint8_t g = (c.fg >> 8)  & 0xFF;
-                uint8_t b = (c.fg)       & 0xFF;
-                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
-                                "\033[38;2;%u;%u;%um", r, g, b);
+                uint8_t r = static_cast<uint8_t>((c.fg >> 16) & 0xFF);
+                uint8_t g = static_cast<uint8_t>((c.fg >> 8)  & 0xFF);
+                uint8_t b = static_cast<uint8_t>((c.fg)       & 0xFF);
+
+                switch (mode)
+                {
+                    case ColorMode::TrueColor:
+                        offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                           "\033[38;2;%u;%u;%um", r, g, b);
+                        break;
+                    case ColorMode::Ansi256:
+                    {
+                        uint8_t idx = rgb_to_ansi256(r, g, b);
+                        offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                           "\033[38;5;%um", idx);
+                        break;
+                    }
+                    case ColorMode::Ansi16:
+                    {
+                        uint8_t idx = rgb_to_ansi16(r, g, b);
+                        int sgr = (idx < 8) ? (30 + idx) : (90 + (idx - 8));
+                        offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                           "\033[%dm", sgr);
+                        break;
+                    }
+                    case ColorMode::NoColor:
+                        break;
+                }
             }
             else
             {
                 offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
-                                "\033[39m");    
+                                   "\033[39m");    
             }
             m_cur_fg = c.fg;
         }
@@ -187,18 +266,41 @@ namespace koto
         // only emit bg SGR when color actually changes
         if (c.bg != m_cur_bg)
         {
-            if (c.bg != COLOR_DEFAULT)
+            if (c.bg != COLOR_DEFAULT && mode != ColorMode::NoColor)
             {
-                uint8_t r = (c.bg >> 16) & 0xFF;
-                uint8_t g = (c.bg >> 8)  & 0xFF;
-                uint8_t b = (c.bg)       & 0xFF;
-                offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
-                                "\033[48;2;%u;%u;%um", r, g, b);
+                uint8_t r = static_cast<uint8_t>((c.bg >> 16) & 0xFF);
+                uint8_t g = static_cast<uint8_t>((c.bg >> 8)  & 0xFF);
+                uint8_t b = static_cast<uint8_t>((c.bg)       & 0xFF);
+
+                switch (mode)
+                {
+                    case ColorMode::TrueColor:
+                        offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                           "\033[48;2;%u;%u;%um", r, g, b);
+                        break;
+                    case ColorMode::Ansi256:
+                    {
+                        uint8_t idx = rgb_to_ansi256(r, g, b);
+                        offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                           "\033[48;5;%um", idx);
+                        break;
+                    }
+                    case ColorMode::Ansi16:
+                    {
+                        uint8_t idx = rgb_to_ansi16(r, g, b);
+                        int sgr = (idx < 8) ? (40 + idx) : (100 + (idx - 8));
+                        offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
+                                           "\033[%dm", sgr);
+                        break;
+                    }
+                    case ColorMode::NoColor:
+                        break;
+                }
             }
             else
             {
                 offset += snprintf(buf + offset, sizeof(buf) - static_cast<size_t>(offset),
-                                "\033[49m");    
+                                   "\033[49m");    
             }
             m_cur_bg = c.bg;
         }
@@ -212,6 +314,31 @@ namespace koto
     auto Frame::render(bool flush) -> void
     {
         m_output.clear();
+
+        // 1. Scan for dirty cells
+        bool any_dirty = false;
+        for (size_t idx = 0; idx < m_back_buffer.size(); ++idx)
+        {
+            if (!m_back_buffer[idx].continuation && !(m_front_buffer[idx] == m_back_buffer[idx]))
+            {
+                any_dirty = true;
+                break;
+            }
+        }
+
+        bool cursor_changed = (m_cursor_visible != m_last_cursor_visible) ||
+                              (m_cursor_visible && (m_cursor_row != m_last_cursor_row || m_cursor_col != m_last_cursor_col));
+
+        // Avoid emitting empty synchronized update sequences for unchanged frames (C-33)
+        if (!any_dirty && !cursor_changed)
+        {
+            return;
+        }
+
+        m_last_cursor_visible = m_cursor_visible;
+        m_last_cursor_row = m_cursor_row;
+        m_last_cursor_col = m_cursor_col;
+
         // reserve a reasonable amount to avoid repeated realloc
         m_output.reserve(static_cast<size_t>(m_rows * m_cols * 4));
 
@@ -222,6 +349,7 @@ namespace koto
         // forces the first dirty cell to always emit SGR
         m_cur_fg = ~uint32_t(0);
         m_cur_bg = ~uint32_t(0);
+        m_cur_attrs = 0xFF;
         int cursor_row = -1;
         int cursor_col = -1;
 
@@ -275,10 +403,15 @@ namespace koto
         m_output.append("\033[?2026l");
 
         // flush entire frame in one write if attached to a terminal and flush requested
-        if (flush && m_term != nullptr && !m_output.empty())
+        if (flush && m_term != nullptr && m_term->is_tty() && !m_output.empty())
         {
-            static_cast<void>(write_all(STDOUT_FILENO, m_output));
-            
+            if (!write_all(STDOUT_FILENO, m_output))
+            {
+                Cell def;
+                def.ch = U'\xFF';
+                def.continuation = false;
+                std::fill(m_front_buffer.begin(), m_front_buffer.end(), def);
+            }
             fflush(stdout);
         }
     }
@@ -297,9 +430,12 @@ namespace koto
         def.ch = U'\xFF';
         def.continuation = false;
         m_front_buffer.assign(total, def);
-        m_back_buffer.assign(total, def);
+        m_back_buffer.assign(total, Cell{});
         m_hit_buffer.assign(total, TAG_NONE);
         m_tag_bounds.clear();
+        m_last_cursor_visible = false;
+        m_last_cursor_row = -1;
+        m_last_cursor_col = -1;
     }
 
     auto Frame::tag_cell(int row, int col, Id tag_id) -> void

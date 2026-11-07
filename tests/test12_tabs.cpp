@@ -196,6 +196,5 @@ int main()
             .draw(frame, chunks[2]);
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

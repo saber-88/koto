@@ -502,6 +502,5 @@ int main()
             .draw(frame, Area(6, 4, 42, 1));
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

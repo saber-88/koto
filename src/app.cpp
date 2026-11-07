@@ -3,7 +3,9 @@
 #include "koto/frame.hpp"
 #include "koto/utf8.hpp"
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
+#include <expected>
 
 namespace koto
 {
@@ -34,6 +36,11 @@ namespace koto
         m_tick_handler = std::move(handler);
         return *this;
     }
+    App& App::on_tick(std::function<void(double)> handler)
+    {
+        m_tick_dt_handler = std::move(handler);
+        return *this;
+    }
     App& App::on_render(std::function<void(Frame&)> handler)
     {
         m_render_handler = std::move(handler);
@@ -45,12 +52,6 @@ namespace koto
         m_focus_manager = &fm;
         m_term.enable_mouse_capture();
         return *this;
-    }
-
-    void App::run(std::function<void (Frame &)> render_function)
-    {
-        m_render_handler = std::move(render_function);
-        run();
     }
 
     Area App::area() const noexcept
@@ -84,6 +85,7 @@ namespace koto
     {
         if (auto* resize = ev.as_resize())
         {
+            m_term.set_dimensions(static_cast<int>(resize->rows), static_cast<int>(resize->cols));
             m_frame.handle_resize(static_cast<int>(resize->rows), static_cast<int>(resize->cols));
             m_needs_draw = true;
             return;
@@ -96,7 +98,7 @@ namespace koto
                 m_paste_handler(paste->text);
                 m_needs_draw = true;
             }
-            else if (m_key_handler)
+            else
             {
                 std::string_view remaining = paste->text;
                 while (!remaining.empty())
@@ -118,7 +120,16 @@ namespace koto
                             ke.ch = static_cast<uint32_t>(cp);
                             if (cp >= 'A' && cp <= 'Z') ke.shift = true;
                         }
-                        m_key_handler(ke);
+
+                        bool consumed = false;
+                        if (m_focus_manager)
+                        {
+                            consumed = m_focus_manager->handle_key(ke);
+                        }
+                        if (!consumed && m_key_handler)
+                        {
+                            m_key_handler(ke);
+                        }
                     }
                 }
                 m_needs_draw = true;
@@ -134,6 +145,7 @@ namespace koto
             if (m_mouse_handler)
             {
                 m_mouse_handler(m);
+                m_needs_draw = true;
             }
             if (m_focus_manager)
             {
@@ -186,17 +198,40 @@ namespace koto
         m_needs_draw = false;
     }
 
-    void App::run()
+    auto App::run() -> std::expected<void, TerminalErrorInfo>
     {
+        if (!m_term.is_tty())
+        {
+            return std::unexpected(TerminalErrorInfo{
+                .code = TerminalError::NotATty,
+                .system_errno = ENOTTY
+            });
+        }
+
+        if (!m_term.in_raw_mode())
+        {
+            auto res = m_term.enter_raw_mode();
+            if (!res)
+            {
+                return res;
+            }
+        }
+
         m_term.hide_cursor();
         m_running = true;
         m_needs_draw = true;
 
         using clock = std::chrono::steady_clock;
         auto next_frame = clock::now();
+        auto last_tick_time = clock::now();
 
         while (m_running)
         {
+            if (m_loop.is_eof() && !m_loop.has_pending())
+            {
+                break;
+            }
+
             // 1. Calculate wait timeout:
             // - If events are already pending in memory or we need a redraw, don't wait (0ms).
             // - If an animation tick handler is active, wait for the remaining time in this 16ms frame (~60 FPS).
@@ -206,7 +241,7 @@ namespace koto
             {
                 wait_ms = 0;
             }
-            else if (m_tick_handler)
+            else if (m_tick_handler || m_tick_dt_handler)
             {
                 auto now = clock::now();
                 if (now < next_frame)
@@ -243,12 +278,15 @@ namespace koto
             if (!m_running) break;
 
             // 3. Periodic animation tick (triggered when frame time elapses)
-            if (m_tick_handler)
+            if (m_tick_handler || m_tick_dt_handler)
             {
                 auto now = clock::now();
                 if (now >= next_frame)
                 {
-                    m_tick_handler();
+                    double dt = std::chrono::duration<double>(now - last_tick_time).count();
+                    last_tick_time = now;
+                    if (m_tick_handler) m_tick_handler();
+                    if (m_tick_dt_handler) m_tick_dt_handler(dt);
                     m_needs_draw = true;
                     next_frame = now + std::chrono::milliseconds(16);
                 }
@@ -260,5 +298,13 @@ namespace koto
                 this->draw_frame();
             }
         }
+
+        return {};
+    }
+
+    auto App::run(std::function<void(Frame&)> render_function) -> std::expected<void, TerminalErrorInfo>
+    {
+        this->on_render(std::move(render_function));
+        return this->run();
     }
 }

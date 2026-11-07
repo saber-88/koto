@@ -150,6 +150,5 @@ int main()
             .draw(frame, rows[3].inset(0, 2, 0, 0));
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

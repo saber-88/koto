@@ -9,6 +9,18 @@ namespace koto
 
     inline constexpr uint32_t COLOR_DEFAULT = 0xFF000000;
 
+    enum class ColorMode : uint8_t
+    {
+        NoColor = 0,
+        Ansi16 = 1,
+        Ansi256 = 2,
+        TrueColor = 3
+    };
+
+    auto rgb_to_ansi256(uint8_t r, uint8_t g, uint8_t b) noexcept -> uint8_t;
+    auto rgb_to_ansi16(uint8_t r, uint8_t g, uint8_t b) noexcept -> uint8_t;
+    auto detect_system_color_mode() noexcept -> ColorMode;
+
     enum class ColorParseError
     {
         EmptyString,

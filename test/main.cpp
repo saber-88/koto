@@ -44,6 +44,14 @@ int main()
         });
     });
 
-    app.run();
+    auto res = app.run();
+    if (!res)
+    {
+        std::fprintf(stderr, "Error: %.*s (errno: %d)\n",
+                     static_cast<int>(res.error().message().size()),
+                     res.error().message().data(),
+                     res.error().system_errno);
+        return 1;
+    }
     return 0;
 }

@@ -150,6 +150,5 @@ int main()
             .draw(frame, rows[6]);
     });
 
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

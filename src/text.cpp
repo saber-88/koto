@@ -61,6 +61,47 @@ namespace koto
         return *this;
     }
 
+    Text& Text::bold(bool b)
+    {
+        if (b) m_attrs = static_cast<uint8_t>(m_attrs | static_cast<uint8_t>(TextAttr::Bold));
+        else   m_attrs = static_cast<uint8_t>(m_attrs & static_cast<uint8_t>(~static_cast<unsigned int>(TextAttr::Bold)));
+        return *this;
+    }
+
+    Text& Text::dim(bool d)
+    {
+        if (d) m_attrs = static_cast<uint8_t>(m_attrs | static_cast<uint8_t>(TextAttr::Dim));
+        else   m_attrs = static_cast<uint8_t>(m_attrs & static_cast<uint8_t>(~static_cast<unsigned int>(TextAttr::Dim)));
+        return *this;
+    }
+
+    Text& Text::italic(bool i)
+    {
+        if (i) m_attrs = static_cast<uint8_t>(m_attrs | static_cast<uint8_t>(TextAttr::Italic));
+        else   m_attrs = static_cast<uint8_t>(m_attrs & static_cast<uint8_t>(~static_cast<unsigned int>(TextAttr::Italic)));
+        return *this;
+    }
+
+    Text& Text::underline(bool u)
+    {
+        if (u) m_attrs = static_cast<uint8_t>(m_attrs | static_cast<uint8_t>(TextAttr::Underline));
+        else   m_attrs = static_cast<uint8_t>(m_attrs & static_cast<uint8_t>(~static_cast<unsigned int>(TextAttr::Underline)));
+        return *this;
+    }
+
+    Text& Text::reverse(bool r)
+    {
+        if (r) m_attrs = static_cast<uint8_t>(m_attrs | static_cast<uint8_t>(TextAttr::Reverse));
+        else   m_attrs = static_cast<uint8_t>(m_attrs & static_cast<uint8_t>(~static_cast<unsigned int>(TextAttr::Reverse)));
+        return *this;
+    }
+
+    Text& Text::attr(TextAttr a)
+    {
+        m_attrs |= static_cast<uint8_t>(a);
+        return *this;
+    }
+
     auto Text::draw(Frame& frame, Area area) -> void
     {
         if (!area.is_valid()) return;
@@ -163,7 +204,7 @@ namespace koto
                     }
                 }
 
-                frame.set_cell(row, col, {cp, m_fg, m_bg});
+                frame.set_cell(row, col, Cell{cp, m_fg, m_bg, w, false, m_attrs});
                 col += w;
             }
 

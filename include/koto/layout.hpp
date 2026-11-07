@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
+#include <span>
 #include <vector>
 
 namespace koto
@@ -101,6 +103,85 @@ namespace koto
         static auto percent(int n) -> Constraint { return {Type::Percent,((n < 0)?0:n) };}
     };
 
+    // Small Buffer Optimized container for layout results.
+    // Stores up to 16 Area elements inline on the stack with ZERO heap allocation (256 bytes).
+    // Automatically spills to heap vector if layout partition exceeds 16 elements.
+    class LayoutResult
+    {
+    public:
+        static constexpr size_t InlineCapacity = 16;
+
+        LayoutResult() = default;
+
+        void push_back(Area a)
+        {
+            if (m_size < InlineCapacity)
+            {
+                m_stack[m_size++] = a;
+            }
+            else
+            {
+                if (m_size == InlineCapacity)
+                {
+                    m_heap.assign(m_stack.begin(), m_stack.end());
+                }
+                m_heap.push_back(a);
+                m_size++;
+            }
+        }
+
+        size_t size() const noexcept { return m_size; }
+        bool empty() const noexcept { return m_size == 0; }
+
+        const Area& operator[](size_t idx) const noexcept
+        {
+            return (m_size <= InlineCapacity) ? m_stack[idx] : m_heap[idx];
+        }
+        Area& operator[](size_t idx) noexcept
+        {
+            return (m_size <= InlineCapacity) ? m_stack[idx] : m_heap[idx];
+        }
+
+        const Area& at(size_t idx) const
+        {
+            if (idx >= m_size)
+            {
+                static const Area empty_area(0, 0, 0, 0);
+                return empty_area;
+            }
+            return (*this)[idx];
+        }
+
+        const Area* begin() const noexcept
+        {
+            return (m_size <= InlineCapacity) ? m_stack.data() : m_heap.data();
+        }
+        const Area* end() const noexcept
+        {
+            return begin() + m_size;
+        }
+        const Area* cbegin() const noexcept { return begin(); }
+        const Area* cend() const noexcept { return end(); }
+
+        const Area& front() const noexcept { return (*this)[0]; }
+        const Area& back() const noexcept { return (*this)[m_size > 0 ? m_size - 1 : 0]; }
+
+        // Explicit conversion to std::vector if the caller specifically wants heap ownership
+        std::vector<Area> to_vector() const
+        {
+            if (m_size <= InlineCapacity)
+            {
+                return std::vector<Area>(m_stack.begin(), m_stack.begin() + m_size);
+            }
+            return m_heap;
+        }
+
+    private:
+        std::array<Area, InlineCapacity> m_stack{};
+        std::vector<Area> m_heap{};
+        size_t m_size = 0;
+    };
+
     class Grid
     {
     public:
@@ -159,13 +240,52 @@ namespace koto
 
     namespace Layout
     {
-        auto vertical(Area area, const std::vector<Constraint>& constraints) -> std::vector<Area>;
-        auto horizontal(Area area, const std::vector<Constraint>& constraints) -> std::vector<Area>;
+        // Dynamic layout split (std::span / std::vector / dynamic list) -> zero-heap LayoutResult (16-capacity inline)
+        auto vertical(Area area, std::span<const Constraint> constraints) -> LayoutResult;
+        auto horizontal(Area area, std::span<const Constraint> constraints) -> LayoutResult;
+
+        // Compile-time array deduction overload returning std::array<Area, N> with structured bindings
+        template <size_t N>
+        inline std::array<Area, N> vertical(Area area, const Constraint (&constraints)[N])
+        {
+            LayoutResult lr = vertical(area, std::span<const Constraint>(constraints, N));
+            std::array<Area, N> arr{};
+            for (size_t i = 0; i < N; ++i)
+            {
+                arr[i] = lr[i];
+            }
+            return arr;
+        }
+
+        template <size_t N>
+        inline std::array<Area, N> vertical(Area area, const std::array<Constraint, N>& constraints)
+        {
+            return vertical(area, constraints.data());
+        }
+
+        template <size_t N>
+        inline std::array<Area, N> horizontal(Area area, const Constraint (&constraints)[N])
+        {
+            LayoutResult lr = horizontal(area, std::span<const Constraint>(constraints, N));
+            std::array<Area, N> arr{};
+            for (size_t i = 0; i < N; ++i)
+            {
+                arr[i] = lr[i];
+            }
+            return arr;
+        }
+
+        template <size_t N>
+        inline std::array<Area, N> horizontal(Area area, const std::array<Constraint, N>& constraints)
+        {
+            return horizontal(area, constraints.data());
+        }
+
         auto center(Area area, int width, int height) -> Area;
 
         auto grid(Area area, 
-                  const std::vector<Constraint>& row_constraints, 
-                  const std::vector<Constraint>& col_constraints) -> Grid;
+                  std::span<const Constraint> row_constraints, 
+                  std::span<const Constraint> col_constraints) -> Grid;
 
         auto grid_uniform(Area area, size_t rows, size_t cols) -> Grid;
 

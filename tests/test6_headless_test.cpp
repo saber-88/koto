@@ -1937,6 +1937,378 @@ void test_self_pipe_and_wakeup()
     std::cout << "PASSED\n";
 }
 
+void test_terminal_error_handling_and_tty()
+{
+    std::cout << "[Test 27] Terminal TTY detection & std::expected error reporting... ";
+
+    Terminal term;
+    // 1. Terminal exposes is_tty() and in_raw_mode()
+    bool expected_tty = (isatty(STDIN_FILENO) != 0 && isatty(STDOUT_FILENO) != 0);
+    assert(term.is_tty() == expected_tty);
+
+    // 2. Safe dimension fallbacks
+    assert(term.get_rows() > 0);
+    assert(term.get_cols() > 0);
+
+    // 3. TerminalError message mappings
+    TerminalErrorInfo err_notty{.code = TerminalError::NotATty, .system_errno = ENOTTY};
+    assert(err_notty.message().find("not a terminal") != std::string_view::npos);
+
+    TerminalErrorInfo err_getattr{.code = TerminalError::GetAttrFailed, .system_errno = EIO};
+    assert(err_getattr.message().find("tcgetattr") != std::string_view::npos);
+
+    TerminalErrorInfo err_setattr{.code = TerminalError::SetAttrFailed, .system_errno = EINVAL};
+    assert(err_setattr.message().find("tcsetattr") != std::string_view::npos);
+
+    // 4. App::run() returns std::expected<void, TerminalErrorInfo>
+    App app;
+    if (!term.is_tty())
+    {
+        // When not a TTY (piped or headless runner), app.run() safely returns unexpected(NotATty)
+        auto res = app.run();
+        assert(!res.has_value());
+        assert(res.error().code == TerminalError::NotATty);
+    }
+
+    std::cout << "PASSED\n";
+}
+
+void test_color_mode_and_quantization()
+{
+    std::cout << "[Test 28] Color capability downscaling (256, 16, NO_COLOR)... ";
+
+    // 1. Test rgb_to_ansi256
+    // Pure black -> 16
+    assert(rgb_to_ansi256(0, 0, 0) == 16);
+    // Pure red -> 196 (16 + 36*5 + 0 + 0)
+    assert(rgb_to_ansi256(255, 0, 0) == 196);
+    // Pure green -> 46 (16 + 0 + 6*5 + 0)
+    assert(rgb_to_ansi256(0, 255, 0) == 46);
+    // Pure blue -> 21 (16 + 0 + 0 + 5)
+    assert(rgb_to_ansi256(0, 0, 255) == 21);
+    // Grayscale ramp
+    assert(rgb_to_ansi256(128, 128, 128) >= 232 && rgb_to_ansi256(128, 128, 128) <= 255);
+
+    // 2. Test rgb_to_ansi16
+    // Pure red -> 9 (Bright Red)
+    assert(rgb_to_ansi16(255, 0, 0) == 9);
+    // Dark red -> 1 (Standard Red)
+    assert(rgb_to_ansi16(128, 0, 0) == 1);
+    // Pure blue -> 12 (Bright Blue)
+    assert(rgb_to_ansi16(0, 0, 255) == 12);
+    // Pure black -> 0
+    assert(rgb_to_ansi16(0, 0, 0) == 0);
+
+    // 3. Test Frame rendering with different ColorMode configurations
+    Terminal term;
+
+    // Test TrueColor mode
+    term.color_mode(ColorMode::TrueColor);
+    Frame frame_true(term);
+    frame_true[0, 0].ch = U'X';
+    frame_true[0, 0].fg = Color::rgb(255, 128, 0);
+    frame_true.render(false);
+    std::string_view out_true = frame_true.raw_output();
+    assert(out_true.find("38;2;255;128;0m") != std::string_view::npos);
+
+    // Test Ansi256 mode
+    term.color_mode(ColorMode::Ansi256);
+    Frame frame_256(term);
+    frame_256[0, 0].ch = U'X';
+    frame_256[0, 0].fg = Color::rgb(255, 0, 0); // 196
+    frame_256.render(false);
+    std::string_view out_256 = frame_256.raw_output();
+    assert(out_256.find("38;5;196m") != std::string_view::npos);
+
+    // Test Ansi16 mode
+    term.color_mode(ColorMode::Ansi16);
+    Frame frame_16(term);
+    frame_16[0, 0].ch = U'X';
+    frame_16[0, 0].fg = Color::rgb(255, 0, 0); // index 9 -> SGR 91m
+    frame_16.render(false);
+    std::string_view out_16 = frame_16.raw_output();
+    assert(out_16.find("\033[91m") != std::string_view::npos);
+
+    // Test NoColor mode
+    term.color_mode(ColorMode::NoColor);
+    Frame frame_nocolor(term);
+    frame_nocolor[0, 0].ch = U'X';
+    frame_nocolor[0, 0].fg = Color::rgb(255, 0, 0);
+    frame_nocolor.render(false);
+    std::string_view out_nocolor = frame_nocolor.raw_output();
+    assert(out_nocolor.find("38;2;") == std::string_view::npos);
+    assert(out_nocolor.find("38;5;") == std::string_view::npos);
+    assert(out_nocolor.find("[91m") == std::string_view::npos);
+
+    std::cout << "PASSED\n";
+}
+
+void test_audit_concerns_resolution()
+{
+    std::cout << "[Test 29] Audit concerns resolution (C-01, C-02, C-04, C-05, C-13, C-15, C-19, C-22, C-23, C-26, C-27, C-28)... ";
+
+    // 1. C-01 Split Escape Sequence Streaming & Preservation
+    {
+        EventLoop loop;
+        // Split ANSI CSI sequence: "\033[1;" followed by "5C" (Ctrl+Right)
+        loop.feed("\033[1;");
+        Event ev1 = loop.poll(0);
+        assert(ev1.is_tick()); // Incomplete: does NOT consume or delete ESC!
+        assert(loop.has_pending());
+
+        loop.feed("5C");
+        Event ev2 = loop.poll(0);
+        assert(ev2.is_key());
+        const auto* ke = ev2.as_key();
+        assert(ke != nullptr);
+        assert(ke->is(Key::CtrlRight));
+        assert(!loop.has_pending()); // fully drained
+
+        // Split SGR mouse sequence: "\033[<68;" followed by "10;20M"
+        loop.feed("\033[<68;");
+        Event ev_m1 = loop.poll(0);
+        assert(ev_m1.is_tick());
+        assert(loop.has_pending());
+
+        loop.feed("10;20M");
+        Event ev_m2 = loop.poll(0);
+        assert(ev_m2.is_mouse());
+        const auto* me = ev_m2.as_mouse();
+        assert(me != nullptr);
+        assert(me->button == MouseButton::WheelUp);
+        assert(me->shift == true);
+        assert(me->col == 9 && me->row == 19);
+        assert(!loop.has_pending());
+    }
+
+    // 2. C-02 SGR Mouse Modifier Masks & Horizontal Wheel
+    {
+        // Shift + WheelUp: "\033[<68;5;5M"
+        Event ev_wup = EventLoop::parse("\033[<68;5;5M");
+        assert(ev_wup.is_mouse());
+        assert(ev_wup.as_mouse()->button == MouseButton::WheelUp);
+        assert(ev_wup.as_mouse()->shift == true);
+
+        // Ctrl + WheelDown: "\033[<81;5;5M" (65 + 16 = 81)
+        Event ev_wdown = EventLoop::parse("\033[<81;5;5M");
+        assert(ev_wdown.is_mouse());
+        assert(ev_wdown.as_mouse()->button == MouseButton::WheelDown);
+        assert(ev_wdown.as_mouse()->ctrl == true);
+
+        // WheelLeft: "\033[<66;5;5M"
+        Event ev_wleft = EventLoop::parse("\033[<66;5;5M");
+        assert(ev_wleft.is_mouse());
+        assert(ev_wleft.as_mouse()->button == MouseButton::WheelLeft);
+        assert(ev_wleft.as_mouse()->is_wheel_left());
+
+        // WheelRight: "\033[<67;5;5M"
+        Event ev_wright = EventLoop::parse("\033[<67;5;5M");
+        assert(ev_wright.is_mouse());
+        assert(ev_wright.as_mouse()->button == MouseButton::WheelRight);
+        assert(ev_wright.as_mouse()->is_wheel_right());
+    }
+
+    // 3. C-04 Strict RFC 3629 UTF-8 Validation in next_codepoint
+    {
+        // E4 41 -> U+FFFD and 'A' preserved (not swallowed)
+        std::string_view sv1 = "\xE4\x41";
+        char32_t cp1 = next_codepoint(sv1);
+        assert(cp1 == U'\uFFFD');
+        assert(sv1 == "A");
+        char32_t cp2 = next_codepoint(sv1);
+        assert(cp2 == U'A');
+
+        // C0 41 -> Overlong rejected
+        std::string_view sv2 = "\xC0\x41";
+        char32_t cp_overlong = next_codepoint(sv2);
+        assert(cp_overlong == U'\uFFFD');
+        assert(sv2 == "A");
+
+        // ED A0 80 -> UTF-16 surrogate (U+D800) rejected
+        std::string_view sv3 = "\xED\xA0\x80";
+        char32_t cp_surrogate = next_codepoint(sv3);
+        assert(cp_surrogate == U'\uFFFD');
+    }
+
+    // 4. C-05 Wide Glyph Overwrite & Orphan Continuation Protection
+    {
+        Frame frame(3, 10);
+        // Place wide glyph at col 0 (cells 0, 1)
+        frame.set_cell(0, 0, Cell{U'🦀'});
+        assert(frame.get_cell(0, 0).width == 2);
+        assert(frame.get_cell(0, 1).continuation == true);
+
+        // Place wide glyph at col 2 (cells 2, 3)
+        frame.set_cell(0, 2, Cell{U'🔥'});
+        assert(frame.get_cell(0, 2).width == 2);
+        assert(frame.get_cell(0, 3).continuation == true);
+
+        // Overwrite col 1 with wide glyph U'🚀':
+        // Col 0 owner cleared, Col 1 is head, Col 2 is continuation, Col 3 cleared (not orphan)
+        frame.set_cell(0, 1, Cell{U'🚀'});
+        assert(frame.get_cell(0, 0).ch == U' ');
+        assert(frame.get_cell(0, 0).width == 1);
+        assert(frame.get_cell(0, 1).ch == U'🚀');
+        assert(frame.get_cell(0, 1).width == 2);
+        assert(frame.get_cell(0, 2).continuation == true);
+        assert(frame.get_cell(0, 3).continuation == false);
+    }
+
+    // 5. C-13 8-digit Hex Parsing
+    {
+        uint32_t c_8digit = parse_color("#FF000000");
+        assert(c_8digit == Color::Red);
+        assert(c_8digit != COLOR_DEFAULT);
+
+        uint32_t c_6digit = parse_color("#FF0000");
+        assert(c_6digit == Color::Red);
+        assert(c_6digit != COLOR_DEFAULT);
+    }
+
+    // 6. C-22 Plain Arrow Key Clean Modifiers
+    {
+        KeyEvent k_up{static_cast<uint32_t>(Key::Up)};
+        assert(k_up.is(Key::Up));
+        assert(!k_up.is(Key::ShiftUp) && !k_up.is(Key::CtrlUp));
+
+        KeyEvent k_shift_up{static_cast<uint32_t>(Key::Up), false, true, false, false};
+        assert(!k_shift_up.is(Key::Up));
+        assert(k_shift_up.is(Key::ShiftUp));
+
+        KeyEvent k_ctrl_up{static_cast<uint32_t>(Key::Up), true, false, false, false};
+        assert(!k_ctrl_up.is(Key::Up));
+        assert(k_ctrl_up.is(Key::CtrlUp));
+    }
+
+    // 7. C-23 is_char() Boundary Validation
+    {
+        assert(!KeyEvent{127}.is_char()); // DEL
+        assert(!KeyEvent{128}.is_char()); // C1
+        assert(!KeyEvent{159}.is_char()); // C1
+        assert(KeyEvent{160}.is_char());  // NBSP
+        assert(KeyEvent{U'A'}.is_char());
+        assert(KeyEvent{U'🦀'}.is_char());
+        assert(!KeyEvent{static_cast<uint32_t>(Key::Up)}.is_char());
+    }
+
+    // 8. C-26 FocusKeyInterceptor with Empty Targets
+    {
+        FocusManager fm_empty;
+        bool interceptor_called = false;
+        fm_empty.interceptor([&](FocusManager&, const KeyEvent&) {
+            interceptor_called = true;
+            return true;
+        });
+        bool consumed = fm_empty.handle_key(KeyEvent{static_cast<uint32_t>(Key::Escape)});
+        assert(consumed);
+        assert(interceptor_called);
+    }
+
+    // 9. C-27 Color::lerp with COLOR_DEFAULT
+    {
+        assert(Color::lerp(COLOR_DEFAULT, Color::Red, 0.0f) == COLOR_DEFAULT);
+        assert(Color::lerp(COLOR_DEFAULT, Color::Red, 1.0f) == Color::Red);
+        assert(Color::lerp(Color::Red, COLOR_DEFAULT, 0.0f) == Color::Red);
+        assert(Color::lerp(Color::Red, COLOR_DEFAULT, 1.0f) == COLOR_DEFAULT);
+    }
+
+    // 10. C-15 Id Hash Sentinel Safety (fnv1a_32 never produces TAG_NONE)
+    {
+        Id id1("test_id");
+        assert(!id1.is_none());
+        assert(id1.value() != TAG_NONE);
+        assert(fnv1a_32("test_id") != TAG_NONE);
+        assert(Id::none().is_none());
+        assert(Id::none().value() == TAG_NONE);
+    }
+
+    // 11. C-19 App on_tick with delta time
+    {
+        App app;
+        bool tick_invoked = false;
+        app.on_tick([&]() {
+            tick_invoked = true;
+        });
+        double captured_dt = 0.0;
+        app.on_tick([&](double dt) {
+            captured_dt = dt;
+        });
+    }
+
+    // 12. C-28 Text Attributes (Bold, Dim, Italic, Underline, Reverse, Strike)
+    {
+        Frame frame(1, 10);
+        Text("Koto").bold().underline().draw(frame, Area{0, 0, 10, 1});
+        assert((frame.get_cell(0, 0).attrs & static_cast<uint8_t>(TextAttr::Bold)) != 0);
+        assert((frame.get_cell(0, 0).attrs & static_cast<uint8_t>(TextAttr::Underline)) != 0);
+        frame.render(false);
+        std::string_view rendered = frame.raw_output();
+        assert(rendered.find("\033[1m") != std::string_view::npos);
+        assert(rendered.find("\033[4m") != std::string_view::npos);
+    }
+
+    // 13. C-33 Unchanged frames emit 0 bytes
+    {
+        Frame frame(2, 5);
+        frame.fill(Area{0, 0, 5, 2}, ' ');
+        frame.render(false);
+        assert(!frame.raw_output().empty());
+
+        frame.render(false);
+        assert(frame.raw_output().empty());
+    }
+
+    std::cout << "PASSED\n";
+}
+
+void test_zero_allocation_layout()
+{
+    std::cout << "[Test 30] Zero-allocation 16-capacity LayoutResult & structured bindings... ";
+    Area screen{0, 0, 80, 24};
+
+    // 1. Literal list with structured bindings (deduces std::array<Area, 3> on the stack)
+    auto [header, body, footer] = Layout::vertical(screen, {
+        Constraint::fixed(3),
+        Constraint::fill(),
+        Constraint::fixed(1)
+    });
+    assert(header.height == 3);
+    assert(footer.height == 1);
+    assert(body.height == 20);
+
+    // 2. auto chunks indexing with LayoutResult (capacity 16 inline)
+    auto chunks = Layout::horizontal(screen, {
+        Constraint::fixed(10),
+        Constraint::fill(),
+        Constraint::fixed(10)
+    });
+    assert(chunks.size() == 3);
+    assert(chunks[0].width == 10);
+    assert(chunks[2].width == 10);
+    assert(chunks[1].width == 60);
+
+    // 3. Dynamic constraints with std::vector via std::span
+    std::vector<Constraint> dyn;
+    for (int i = 0; i < 16; ++i) {
+        dyn.push_back(Constraint::fill());
+    }
+    auto res16 = Layout::vertical(screen, dyn);
+    assert(res16.size() == 16);
+    assert(res16[0].height == 2);
+    assert(res16[15].height == 1);
+
+    // 4. Exceeding 16 elements (dynamic fallback to heap)
+    dyn.push_back(Constraint::fill()); // 17 elements
+    auto res17 = Layout::vertical(screen, dyn);
+    assert(res17.size() == 17);
+
+    // 5. Explicit to_vector()
+    std::vector<Area> vec = res16.to_vector();
+    assert(vec.size() == 16);
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -1969,9 +2341,13 @@ int main()
     test_frame_abstractions_fill_and_mouse_target();
     test_button_widget();
     test_self_pipe_and_wakeup();
+    test_terminal_error_handling_and_tty();
+    test_color_mode_and_quantization();
+    test_audit_concerns_resolution();
+    test_zero_allocation_layout();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 26 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 30 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

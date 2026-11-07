@@ -43,6 +43,7 @@ namespace koto
             // Snapshot testing & inspection
             auto to_plain_text() const -> std::string;
             auto to_plain_text_row(int r) const -> std::string;
+            std::string_view raw_output() const noexcept { return m_output; }
             auto cursor_row() const -> int { return m_cursor_row; }
             auto cursor_col() const -> int { return m_cursor_col; }
             auto cursor_visible() const -> bool { return m_cursor_visible; }
@@ -58,9 +59,13 @@ namespace koto
             std::string m_output;              // output buffer for batched write
             uint32_t m_cur_fg = COLOR_DEFAULT;  // tracked SGR fg
             uint32_t m_cur_bg = COLOR_DEFAULT;  // tracked SGR bg
+            uint8_t  m_cur_attrs = 0;            // tracked SGR text attributes
             bool m_cursor_visible = false;
             int m_cursor_row = -1;
             int m_cursor_col = -1;
+            bool m_last_cursor_visible = false;
+            int m_last_cursor_row = -1;
+            int m_last_cursor_col = -1;
             auto move_cursor(int row, int col) -> void;
             auto paint_cell(Cell c) -> void;
     };
