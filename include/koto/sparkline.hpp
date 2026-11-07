@@ -19,10 +19,8 @@ namespace koto
         Sparkline& max(uint64_t max_value);
         Sparkline& align_right(bool right = true);
 
-        Sparkline& fg(std::string_view fg);
-        Sparkline& fg(uint32_t fg);
-        Sparkline& bg(std::string_view bg);
-        Sparkline& bg(uint32_t bg);
+        Sparkline& fg(Color fg);
+        Sparkline& bg(Color bg);
 
         void draw(Frame& frame, Area area) override;
 

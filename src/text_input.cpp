@@ -281,51 +281,27 @@ namespace koto
         return *this;
     }
 
-    TextInput& TextInput::fg(std::string_view color)
+    TextInput& TextInput::fg(Color color)
     {
-        m_fg = parse_color(color);
+        m_fg = color.value;
         return *this;
     }
 
-    TextInput& TextInput::bg(std::string_view color)
+    TextInput& TextInput::bg(Color color)
     {
-        m_bg = parse_color(color);
+        m_bg = color.value;
         return *this;
     }
 
-    TextInput& TextInput::fg(uint32_t color)
+    TextInput& TextInput::placeholder_fg(Color color)
     {
-        m_fg = color;
+        m_placeholder_fg = color.value;
         return *this;
     }
 
-    TextInput& TextInput::bg(uint32_t color)
+    TextInput& TextInput::focused_border_fg(Color color)
     {
-        m_bg = color;
-        return *this;
-    }
-
-    TextInput& TextInput::placeholder_fg(std::string_view color)
-    {
-        m_placeholder_fg = parse_color(color);
-        return *this;
-    }
-
-    TextInput& TextInput::placeholder_fg(uint32_t color)
-    {
-        m_placeholder_fg = color;
-        return *this;
-    }
-
-    TextInput& TextInput::focused_border_fg(std::string_view color)
-    {
-        m_focused_border_fg = parse_color(color);
-        return *this;
-    }
-
-    TextInput& TextInput::focused_border_fg(uint32_t color)
-    {
-        m_focused_border_fg = color;
+        m_focused_border_fg = color.value;
         return *this;
     }
 

@@ -25,23 +25,16 @@ namespace koto
         Button& border_style(BorderStyle style);
 
         // Unfocused styling
-        Button& fg(uint32_t color);
-        Button& fg(std::string_view color);
-        Button& bg(uint32_t color);
-        Button& bg(std::string_view color);
-        Button& label_fg(uint32_t color);
-        Button& label_fg(std::string_view color);
+        Button& fg(Color color);
+        Button& bg(Color color);
+        Button& label_fg(Color color);
 
         // Focused styling
         Button& focused(bool is_foc);
-        Button& focused_fg(uint32_t color);
-        Button& focused_fg(std::string_view color);
-        Button& focused_bg(uint32_t color);
-        Button& focused_bg(std::string_view color);
-        Button& focused_border_fg(uint32_t color);
-        Button& focused_border_fg(std::string_view color);
-        Button& focused_label_fg(uint32_t color);
-        Button& focused_label_fg(std::string_view color);
+        Button& focused_fg(Color color);
+        Button& focused_bg(Color color);
+        Button& focused_border_fg(Color color);
+        Button& focused_label_fg(Color color);
 
         // Identification & Focus integration
         Button& id(Id id);

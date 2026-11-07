@@ -35,22 +35,17 @@ namespace koto
         public:
          
             Box();
-            Box& fg(std::string_view fg);
-            Box& bg(std::string_view bg);
-            Box& title_fg(std::string_view fg);
-            Box& title_bg(std::string_view bg);
-            Box& fg(uint32_t fg);
-            Box& bg(uint32_t bg);
-            Box& title_fg(uint32_t fg);
-            Box& title_bg(uint32_t bg);
+            Box& fg(Color fg);
+            Box& bg(Color bg);
+            Box& title_fg(Color fg);
+            Box& title_bg(Color bg);
             Box& filled(bool fill);
             Box& border_style(BorderStyle style);
             Box& borders(Borders borders);
             Box& title(std::string title);
             Box& title_align(TitleAlign align);
             Box& focused(bool is_focused);
-            Box& focused_border_fg(std::string_view fg);
-            Box& focused_border_fg(uint32_t fg);
+            Box& focused_border_fg(Color fg);
             Box& focused_border_style(BorderStyle style);
             Box& id(Id tag_id);
             Box& tag(Id tag_id);

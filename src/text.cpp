@@ -34,22 +34,12 @@ namespace koto
         return *this;
     }
 
-    Text& Text::fg(std::string_view fg)
-    {
-        m_fg = parse_color(fg);
-        return *this;
-    }
-    Text& Text::bg(std::string_view bg)
-    {
-        m_bg = parse_color(bg);
-        return *this;
-    }
-    Text& Text::fg(uint32_t fg)
+    Text& Text::fg(Color fg)
     {
         m_fg = fg;
         return *this;
     }
-    Text& Text::bg(uint32_t bg)
+    Text& Text::bg(Color bg)
     {
         m_bg = bg;
         return *this;

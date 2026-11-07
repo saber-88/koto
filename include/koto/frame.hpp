@@ -31,6 +31,10 @@ namespace koto
             auto render(bool flush = true) -> void;
             auto set_cursor(int row, int col) -> void;
             auto area() const -> Area;
+            int rows() const noexcept { return m_rows; }
+            int cols() const noexcept { return m_cols; }
+            int height() const noexcept { return m_rows; }
+            int width() const noexcept { return m_cols; }
 
             // Spatial Tag / Hit-Buffer & Geometry API
             auto tag_cell(int row, int col, Id tag_id) -> void;

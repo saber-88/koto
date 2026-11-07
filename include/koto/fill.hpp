@@ -15,13 +15,10 @@ namespace koto
     {
     public:
         Fill() = default;
-        explicit Fill(uint32_t bg);
-        explicit Fill(std::string_view bg);
+        explicit Fill(Color bg);
 
-        Fill& bg(uint32_t color);
-        Fill& bg(std::string_view color);
-        Fill& fg(uint32_t color);
-        Fill& fg(std::string_view color);
+        Fill& bg(Color color);
+        Fill& fg(Color color);
         Fill& char_code(char32_t ch);
         Fill& id(Id id);
 

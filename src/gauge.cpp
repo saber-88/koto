@@ -49,81 +49,41 @@ namespace koto
         return *this;
     }
 
-    Gauge& Gauge::fg(std::string_view fg)
+    Gauge& Gauge::fg(Color fg)
     {
         return filled_fg(fg);
     }
 
-    Gauge& Gauge::fg(uint32_t fg)
-    {
-        return filled_fg(fg);
-    }
-
-    Gauge& Gauge::bg(std::string_view bg)
+    Gauge& Gauge::bg(Color bg)
     {
         return empty_bg(bg);
     }
 
-    Gauge& Gauge::bg(uint32_t bg)
-    {
-        return empty_bg(bg);
-    }
-
-    Gauge& Gauge::filled_fg(std::string_view fg)
-    {
-        m_filled_fg = parse_color(fg);
-        return *this;
-    }
-
-    Gauge& Gauge::filled_fg(uint32_t fg)
+    Gauge& Gauge::filled_fg(Color fg)
     {
         m_filled_fg = fg;
         return *this;
     }
 
-    Gauge& Gauge::filled_bg(std::string_view bg)
-    {
-        m_filled_bg = parse_color(bg);
-        return *this;
-    }
-
-    Gauge& Gauge::filled_bg(uint32_t bg)
+    Gauge& Gauge::filled_bg(Color bg)
     {
         m_filled_bg = bg;
         return *this;
     }
 
-    Gauge& Gauge::empty_fg(std::string_view fg)
-    {
-        m_empty_fg = parse_color(fg);
-        return *this;
-    }
-
-    Gauge& Gauge::empty_fg(uint32_t fg)
+    Gauge& Gauge::empty_fg(Color fg)
     {
         m_empty_fg = fg;
         return *this;
     }
 
-    Gauge& Gauge::empty_bg(std::string_view bg)
-    {
-        m_empty_bg = parse_color(bg);
-        return *this;
-    }
-
-    Gauge& Gauge::empty_bg(uint32_t bg)
+    Gauge& Gauge::empty_bg(Color bg)
     {
         m_empty_bg = bg;
         return *this;
     }
 
-    Gauge& Gauge::label_fg(std::string_view fg)
-    {
-        m_label_fg = parse_color(fg);
-        return *this;
-    }
-
-    Gauge& Gauge::label_fg(uint32_t fg)
+    Gauge& Gauge::label_fg(Color fg)
     {
         m_label_fg = fg;
         return *this;

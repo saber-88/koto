@@ -191,49 +191,25 @@ namespace koto
     }
 
 
-    List& List::fg(std::string_view color)
-    {
-        m_fg = parse_color(color);
-        return *this;   
-    }
-
-    List& List::bg(std::string_view color)
-    {
-        m_bg = parse_color(color);
-        return *this;   
-    }
-
-    List& List::highlight_fg(std::string_view color)
-    {
-        m_highlighted_fg = parse_color(color);
-        return *this;   
-    }
-
-    List& List::highlight_bg(std::string_view color)
-    {
-        m_highlighted_bg = parse_color(color);
-        return *this;   
-    }
-
-    List& List::fg(uint32_t color)
+    List& List::fg(Color color)
     {
         m_fg = color;
         return *this;   
     }
 
-    List& List::bg(uint32_t color)
+    List& List::bg(Color color)
     {
         m_bg = color;
         return *this;   
     }
 
-    List& List::highlight_fg(uint32_t color)
+    List& List::highlight_fg(Color color)
     {
         m_highlighted_fg = color;
         return *this;   
     }
 
-    List& List::highlight_bg(uint32_t color)
+    List& List::highlight_bg(Color color)
     {
         m_highlighted_bg = color;
         return *this;   
@@ -251,25 +227,13 @@ namespace koto
         return *this;
     }
 
-    List& List::title_fg(std::string_view color)
-    {
-        m_title_fg = parse_color(color);
-        return *this;
-    }
-
-    List& List::title_fg(uint32_t color)
+    List& List::title_fg(Color color)
     {
         m_title_fg = color;
         return *this;
     }
 
-    List& List::title_bg(std::string_view color)
-    {
-        m_title_bg = parse_color(color);
-        return *this;
-    }
-
-    List& List::title_bg(uint32_t color)
+    List& List::title_bg(Color color)
     {
         m_title_bg = color;
         return *this;
@@ -294,13 +258,7 @@ namespace koto
         return *this;
     }
 
-    List& List::focused_border_fg(std::string_view color)
-    {
-        m_focused_border_fg = parse_color(color);
-        return *this;
-    }
-
-    List& List::focused_border_fg(uint32_t color)
+    List& List::focused_border_fg(Color color)
     {
         m_focused_border_fg = color;
         return *this;

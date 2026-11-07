@@ -60,6 +60,10 @@ namespace koto
 
             auto get_cols() const -> int;
             auto get_rows() const -> int;
+            int cols() const noexcept { return m_cols; }
+            int rows() const noexcept { return m_rows; }
+            int width() const noexcept { return m_cols; }
+            int height() const noexcept { return m_rows; }
             auto set_dimensions(int r, int c) noexcept -> void { m_rows = r; m_cols = c; }
 
             auto show_cursor() const -> void;

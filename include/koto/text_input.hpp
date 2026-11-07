@@ -60,14 +60,10 @@ namespace koto
             TextInput& placeholder(std::string_view placeholder);
             TextInput& title(std::string_view title);
             TextInput& border_style(BorderStyle style);
-            TextInput& fg(std::string_view color);
-            TextInput& bg(std::string_view color);
-            TextInput& fg(uint32_t color);
-            TextInput& bg(uint32_t color);
-            TextInput& placeholder_fg(std::string_view color);
-            TextInput& placeholder_fg(uint32_t color);
-            TextInput& focused_border_fg(std::string_view color);
-            TextInput& focused_border_fg(uint32_t color);
+            TextInput& fg(Color color);
+            TextInput& bg(Color color);
+            TextInput& placeholder_fg(Color color);
+            TextInput& focused_border_fg(Color color);
             TextInput& focused(bool is_focused);
             TextInput& id(Id tag_id);
 

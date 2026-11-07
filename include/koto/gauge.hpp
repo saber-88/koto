@@ -20,23 +20,16 @@ namespace koto
         Gauge& empty_char(char32_t ch);
         Gauge& use_fractional_blocks(bool enable);
 
-        Gauge& fg(std::string_view fg);
-        Gauge& fg(uint32_t fg);
-        Gauge& bg(std::string_view bg);
-        Gauge& bg(uint32_t bg);
+        Gauge& fg(Color fg);
+        Gauge& bg(Color bg);
 
-        Gauge& filled_fg(std::string_view fg);
-        Gauge& filled_fg(uint32_t fg);
-        Gauge& filled_bg(std::string_view bg);
-        Gauge& filled_bg(uint32_t bg);
+        Gauge& filled_fg(Color fg);
+        Gauge& filled_bg(Color bg);
 
-        Gauge& empty_fg(std::string_view fg);
-        Gauge& empty_fg(uint32_t fg);
-        Gauge& empty_bg(std::string_view bg);
-        Gauge& empty_bg(uint32_t bg);
+        Gauge& empty_fg(Color fg);
+        Gauge& empty_bg(Color bg);
 
-        Gauge& label_fg(std::string_view fg);
-        Gauge& label_fg(uint32_t fg);
+        Gauge& label_fg(Color fg);
 
         void draw(Frame& frame, Area area) override;
 

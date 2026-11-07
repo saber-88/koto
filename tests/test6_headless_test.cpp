@@ -2309,6 +2309,74 @@ void test_zero_allocation_layout()
     std::cout << "PASSED\n";
 }
 
+void test_semantic_contract_and_color_type()
+{
+    std::cout << "Running test_semantic_contract_and_color_type... ";
+
+    // 1. Color value type conversions
+    Color c1 = 0x00FF0000;
+    Color c2 = "#FF0000";
+    Color c3 = "red";
+    Color c4 = Color::Red;
+
+    assert(c1.value == 0x00FF0000);
+    assert(c2.value == 0x00FF0000);
+    assert(c3.value == 0x00FF0000);
+    assert(c4.value == 0x00FF0000);
+    assert(c1 == c2);
+    assert(c2 == c3);
+    assert(c3 == c4);
+
+    // Implicit conversion to uint32_t for Cell rendering
+    uint32_t raw_val = c1;
+    assert(raw_val == 0x00FF0000);
+
+    // 2. Geometry noun accessors on Frame
+    Frame frame(24, 80);
+    assert(frame.rows() == 24);
+    assert(frame.cols() == 80);
+    assert(frame.height() == 24);
+    assert(frame.width() == 80);
+
+    // 3. Focus API unification
+    FocusManager fm;
+    Id b1("btn1");
+    Id b2("btn2");
+    fm.add(b1);
+    fm.add(b2);
+
+    assert(fm.focus(b2));
+    assert(fm.current_id() == b2);
+    assert(fm.focus(static_cast<size_t>(0)));
+    assert(fm.current_id() == b1);
+
+    // 4. Widget Color consistency across entire suite
+    Area area{0, 0, 20, 5};
+    Box().border_style(BorderStyle::Rounded).fg("#FF00FF").bg(Color::Black).draw(frame, area);
+    Text("Unified").fg(Color::Cyan).bg(0x00222222).draw(frame, area);
+    Fill(Color::Blue).fg(Color::White).draw(frame, Area{0, 0, 5, 2});
+    Rule().fg("#00FF00").draw(frame, Area{2, 0, 20, 1});
+    Gauge().ratio(0.5f).fg(Color::Green).bg(Color::DarkGray).draw(frame, Area{3, 0, 20, 1});
+    std::vector<uint64_t> sp_data = {1, 3, 5, 2};
+    Sparkline().data(sp_data).fg("#FFAA00").draw(frame, Area{4, 0, 20, 1});
+
+    Button("Click").fg(Color::Yellow).bg(Color::Black).focused_border_fg("#00FFFF").draw(frame, Area{0, 0, 10, 3});
+
+    TextInputState tis("Hello");
+    TextInput(tis).fg(Color::White).bg(Color::Black).placeholder_fg("#888888").draw(frame, Area{0, 0, 20, 3});
+
+    ListState ls({"item 1", "item 2"});
+    List(ls).fg(Color::White).highlight_fg("#00FF00").draw(frame, Area{0, 0, 15, 4});
+
+    TextAreaState tas("Multiline\nText");
+    TextArea(tas).fg(Color::LightGray).border_style(BorderStyle::Single).draw(frame, Area{0, 0, 20, 4});
+
+    std::vector<std::string> tab_titles = {"Tab1", "Tab2"};
+    Tabs(tab_titles).active_fg(Color::DarkGray).inactive_fg(Color::Cyan).draw(frame, Area{0, 0, 20, 3});
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -2345,9 +2413,10 @@ int main()
     test_color_mode_and_quantization();
     test_audit_concerns_resolution();
     test_zero_allocation_layout();
+    test_semantic_contract_and_color_type();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 30 HEADLESS TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 31 HEADLESS TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

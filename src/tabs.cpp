@@ -215,61 +215,31 @@ namespace koto
         return *this;
     }
 
-    Tabs& Tabs::separator_fg(std::string_view color)
-    {
-        m_separator_fg = parse_color(color);
-        return *this;
-    }
-
-    Tabs& Tabs::separator_fg(uint32_t color)
+    Tabs& Tabs::separator_fg(Color color)
     {
         m_separator_fg = color;
         return *this;
     }
 
-    Tabs& Tabs::active_fg(std::string_view color)
-    {
-        m_active_fg = parse_color(color);
-        return *this;
-    }
-
-    Tabs& Tabs::active_fg(uint32_t color)
+    Tabs& Tabs::active_fg(Color color)
     {
         m_active_fg = color;
         return *this;
     }
 
-    Tabs& Tabs::active_bg(std::string_view color)
-    {
-        m_active_bg = parse_color(color);
-        return *this;
-    }
-
-    Tabs& Tabs::active_bg(uint32_t color)
+    Tabs& Tabs::active_bg(Color color)
     {
         m_active_bg = color;
         return *this;
     }
 
-    Tabs& Tabs::inactive_fg(std::string_view color)
-    {
-        m_inactive_fg = parse_color(color);
-        return *this;
-    }
-
-    Tabs& Tabs::inactive_fg(uint32_t color)
+    Tabs& Tabs::inactive_fg(Color color)
     {
         m_inactive_fg = color;
         return *this;
     }
 
-    Tabs& Tabs::inactive_bg(std::string_view color)
-    {
-        m_inactive_bg = parse_color(color);
-        return *this;
-    }
-
-    Tabs& Tabs::inactive_bg(uint32_t color)
+    Tabs& Tabs::inactive_bg(Color color)
     {
         m_inactive_bg = color;
         return *this;
@@ -300,13 +270,7 @@ namespace koto
         return *this;
     }
 
-    Tabs& Tabs::focused_border_fg(std::string_view color)
-    {
-        m_focused_border_fg = parse_color(color);
-        return *this;
-    }
-
-    Tabs& Tabs::focused_border_fg(uint32_t color)
+    Tabs& Tabs::focused_border_fg(Color color)
     {
         m_focused_border_fg = color;
         return *this;

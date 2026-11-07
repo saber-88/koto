@@ -155,6 +155,7 @@ namespace koto
         bool prev();                               // Shift+Tab / BackTab backward
         bool focus(size_t index);                  // Focus by 0-based ring index
         bool focus_id(Id id);                      // Focus by Id token (from click or code)
+        bool focus(Id id) { return focus_id(id); } // Unified focus(Id) overload
 
         template<typename T>
         requires FocusableState<std::remove_cvref_t<T>>

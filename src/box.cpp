@@ -14,42 +14,22 @@ namespace koto
     
     Box::Box(){}
 
-    Box& Box::fg(std::string_view fg)
-    {
-        m_fg = parse_color(fg);
-        return *this;
-    }
-    Box& Box::bg(std::string_view bg)
-    {
-        m_bg = parse_color(bg);
-        return *this;
-    }
-    Box& Box::title_fg(std::string_view fg)
-    {
-        m_title_fg = parse_color(fg);
-        return *this;
-    }
-    Box& Box::title_bg(std::string_view bg)
-    {
-        m_title_bg = parse_color(bg);
-        return *this;
-    }
-    Box& Box::fg(uint32_t fg)
+    Box& Box::fg(Color fg)
     {
         m_fg = fg;
         return *this;
     }
-    Box& Box::bg(uint32_t bg)
+    Box& Box::bg(Color bg)
     {
         m_bg = bg;
         return *this;
     }
-    Box& Box::title_fg(uint32_t fg)
+    Box& Box::title_fg(Color fg)
     {
         m_title_fg = fg;
         return *this;
     }
-    Box& Box::title_bg(uint32_t bg)
+    Box& Box::title_bg(Color bg)
     {
         m_title_bg = bg;
         return *this;
@@ -91,13 +71,7 @@ namespace koto
         return *this;
     }
 
-    Box& Box::focused_border_fg(std::string_view fg)
-    {
-        m_focused_border_fg = parse_color(fg);
-        return *this;
-    }
-
-    Box& Box::focused_border_fg(uint32_t fg)
+    Box& Box::focused_border_fg(Color fg)
     {
         m_focused_border_fg = fg;
         return *this;

@@ -37,25 +37,13 @@ namespace koto
         return *this;
     }
 
-    Sparkline& Sparkline::fg(std::string_view fg)
-    {
-        m_fg = parse_color(fg);
-        return *this;
-    }
-
-    Sparkline& Sparkline::fg(uint32_t fg)
+    Sparkline& Sparkline::fg(Color fg)
     {
         m_fg = fg;
         return *this;
     }
 
-    Sparkline& Sparkline::bg(std::string_view bg)
-    {
-        m_bg = parse_color(bg);
-        return *this;
-    }
-
-    Sparkline& Sparkline::bg(uint32_t bg)
+    Sparkline& Sparkline::bg(Color bg)
     {
         m_bg = bg;
         return *this;

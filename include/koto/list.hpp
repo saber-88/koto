@@ -54,26 +54,19 @@ namespace koto
         
         
         public:
-            List& fg(std::string_view color);
-            List& bg(std::string_view color);
-            List& highlight_fg(std::string_view color);
-            List& highlight_bg(std::string_view color);
-            List& fg(uint32_t color);
-            List& bg(uint32_t color);
-            List& highlight_fg(uint32_t color);
-            List& highlight_bg(uint32_t color);
+            List& fg(Color color);
+            List& bg(Color color);
+            List& highlight_fg(Color color);
+            List& highlight_bg(Color color);
             List& border_style(BorderStyle border);
             List& highlight_symbol(std::string symbol);
             List& title(std::string title);
-            List& title_fg(std::string_view color);
-            List& title_fg(uint32_t color);
-            List& title_bg(std::string_view color);
-            List& title_bg(uint32_t color);
+            List& title_fg(Color color);
+            List& title_bg(Color color);
             List& title_align(TitleAlign align);
             List& overflow(TextOverflow o);
             List& focused(bool is_focused);
-            List& focused_border_fg(std::string_view color);
-            List& focused_border_fg(uint32_t color);
+            List& focused_border_fg(Color color);
             List& id(Id tag_id);
             void draw(Frame &frame, Area area) override;
             explicit List(ListState& state) : m_state(state) {}

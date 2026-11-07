@@ -26,43 +26,28 @@ namespace koto
         return *this;
     }
 
-    Button& Button::fg(uint32_t color)
+    Button& Button::fg(Color color)
     {
-        m_fg = color;
+        m_fg = color.value;
         m_has_fg = true;
         if (!m_has_label_fg)
         {
-            m_label_fg = color;
+            m_label_fg = color.value;
         }
         return *this;
     }
 
-    Button& Button::fg(std::string_view color)
+    Button& Button::bg(Color color)
     {
-        return fg(parse_color(color));
-    }
-
-    Button& Button::bg(uint32_t color)
-    {
-        m_bg = color;
+        m_bg = color.value;
         return *this;
     }
 
-    Button& Button::bg(std::string_view color)
+    Button& Button::label_fg(Color color)
     {
-        return bg(parse_color(color));
-    }
-
-    Button& Button::label_fg(uint32_t color)
-    {
-        m_label_fg = color;
+        m_label_fg = color.value;
         m_has_label_fg = true;
         return *this;
-    }
-
-    Button& Button::label_fg(std::string_view color)
-    {
-        return label_fg(parse_color(color));
     }
 
     Button& Button::focused(bool is_foc)
@@ -72,60 +57,40 @@ namespace koto
         return *this;
     }
 
-    Button& Button::focused_fg(uint32_t color)
+    Button& Button::focused_fg(Color color)
     {
-        m_focused_fg = color;
+        m_focused_fg = color.value;
         m_has_focused_fg = true;
         if (!m_has_focused_label_fg)
         {
-            m_focused_label_fg = color;
+            m_focused_label_fg = color.value;
         }
         if (!m_has_focused_border_fg)
         {
-            m_focused_border_fg = color;
+            m_focused_border_fg = color.value;
         }
         return *this;
     }
 
-    Button& Button::focused_fg(std::string_view color)
+    Button& Button::focused_bg(Color color)
     {
-        return focused_fg(parse_color(color));
-    }
-
-    Button& Button::focused_bg(uint32_t color)
-    {
-        m_focused_bg = color;
+        m_focused_bg = color.value;
         m_has_focused_bg = true;
         return *this;
     }
 
-    Button& Button::focused_bg(std::string_view color)
+    Button& Button::focused_border_fg(Color color)
     {
-        return focused_bg(parse_color(color));
-    }
-
-    Button& Button::focused_border_fg(uint32_t color)
-    {
-        m_focused_border_fg = color;
+        m_focused_border_fg = color.value;
         m_has_focused_border_fg = true;
         return *this;
     }
 
-    Button& Button::focused_border_fg(std::string_view color)
+    Button& Button::focused_label_fg(Color color)
     {
-        return focused_border_fg(parse_color(color));
-    }
-
-    Button& Button::focused_label_fg(uint32_t color)
-    {
-        m_focused_label_fg = color;
+        m_focused_label_fg = color.value;
         m_has_focused_label_fg = true;
         return *this;
-    }
-
-    Button& Button::focused_label_fg(std::string_view color)
-    {
-        return focused_label_fg(parse_color(color));
     }
 
     Button& Button::id(Id id)

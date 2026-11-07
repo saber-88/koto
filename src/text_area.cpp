@@ -463,37 +463,19 @@ namespace koto
         return *this;
     }
 
-    TextArea& TextArea::fg(std::string_view fg)
-    {
-        m_fg = parse_color(fg);
-        return *this;
-    }
-
-    TextArea& TextArea::fg(uint32_t fg)
+    TextArea& TextArea::fg(Color fg)
     {
         m_fg = fg;
         return *this;
     }
 
-    TextArea& TextArea::bg(std::string_view bg)
-    {
-        m_bg = parse_color(bg);
-        return *this;
-    }
-
-    TextArea& TextArea::bg(uint32_t bg)
+    TextArea& TextArea::bg(Color bg)
     {
         m_bg = bg;
         return *this;
     }
 
-    TextArea& TextArea::line_number_fg(std::string_view fg)
-    {
-        m_line_number_fg = parse_color(fg);
-        return *this;
-    }
-
-    TextArea& TextArea::line_number_fg(uint32_t fg)
+    TextArea& TextArea::line_number_fg(Color fg)
     {
         m_line_number_fg = fg;
         return *this;
@@ -519,13 +501,7 @@ namespace koto
         return *this;
     }
 
-    TextArea& TextArea::focused_border_fg(std::string_view fg)
-    {
-        m_focused_border_fg = parse_color(fg);
-        return *this;
-    }
-
-    TextArea& TextArea::focused_border_fg(uint32_t fg)
+    TextArea& TextArea::focused_border_fg(Color fg)
     {
         m_focused_border_fg = fg;
         return *this;

@@ -64,25 +64,19 @@ namespace koto
         Tabs& selected(size_t index);
         Tabs& style(TabsStyle s);
         Tabs& separator(std::string_view sep);
-        Tabs& separator_fg(std::string_view color);
-        Tabs& separator_fg(uint32_t color);
+        Tabs& separator_fg(Color color);
 
-        Tabs& active_fg(std::string_view color);
-        Tabs& active_fg(uint32_t color);
-        Tabs& active_bg(std::string_view color);
-        Tabs& active_bg(uint32_t color);
+        Tabs& active_fg(Color color);
+        Tabs& active_bg(Color color);
 
-        Tabs& inactive_fg(std::string_view color);
-        Tabs& inactive_fg(uint32_t color);
-        Tabs& inactive_bg(std::string_view color);
-        Tabs& inactive_bg(uint32_t color);
+        Tabs& inactive_fg(Color color);
+        Tabs& inactive_bg(Color color);
 
         Tabs& border_style(BorderStyle border);
         Tabs& title(std::string_view title);
         Tabs& title_align(TitleAlign align);
         Tabs& focused(bool is_focused);
-        Tabs& focused_border_fg(std::string_view color);
-        Tabs& focused_border_fg(uint32_t color);
+        Tabs& focused_border_fg(Color color);
         Tabs& id(Id tag_id);
 
         void draw(Frame& frame, Area area) override;

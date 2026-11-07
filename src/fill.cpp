@@ -4,35 +4,19 @@
 
 namespace koto
 {
-    Fill::Fill(uint32_t bg)
-        : m_bg(bg)
+    Fill::Fill(Color bg)
+        : m_bg(bg.value)
     {}
 
-    Fill::Fill(std::string_view bg)
-        : m_bg(parse_color(bg))
-    {}
-
-    Fill& Fill::bg(uint32_t color)
+    Fill& Fill::bg(Color color)
     {
-        m_bg = color;
+        m_bg = color.value;
         return *this;
     }
 
-    Fill& Fill::bg(std::string_view color)
+    Fill& Fill::fg(Color color)
     {
-        m_bg = parse_color(color);
-        return *this;
-    }
-
-    Fill& Fill::fg(uint32_t color)
-    {
-        m_fg = color;
-        return *this;
-    }
-
-    Fill& Fill::fg(std::string_view color)
-    {
-        m_fg = parse_color(color);
+        m_fg = color.value;
         return *this;
     }
 

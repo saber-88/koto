@@ -29,49 +29,25 @@ namespace koto
         return *this;
     }
 
-    Rule& Rule::fg(std::string_view fg)
-    {
-        m_fg = parse_color(fg);
-        return *this;
-    }
-
-    Rule& Rule::fg(uint32_t fg)
+    Rule& Rule::fg(Color fg)
     {
         m_fg = fg;
         return *this;
     }
 
-    Rule& Rule::bg(std::string_view bg)
-    {
-        m_bg = parse_color(bg);
-        return *this;
-    }
-
-    Rule& Rule::bg(uint32_t bg)
+    Rule& Rule::bg(Color bg)
     {
         m_bg = bg;
         return *this;
     }
 
-    Rule& Rule::title_fg(std::string_view fg)
-    {
-        m_title_fg = parse_color(fg);
-        return *this;
-    }
-
-    Rule& Rule::title_fg(uint32_t fg)
+    Rule& Rule::title_fg(Color fg)
     {
         m_title_fg = fg;
         return *this;
     }
 
-    Rule& Rule::title_bg(std::string_view bg)
-    {
-        m_title_bg = parse_color(bg);
-        return *this;
-    }
-
-    Rule& Rule::title_bg(uint32_t bg)
+    Rule& Rule::title_bg(Color bg)
     {
         m_title_bg = bg;
         return *this;

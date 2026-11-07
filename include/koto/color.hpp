@@ -33,6 +33,17 @@ namespace koto
 
     struct Color
     {
+        uint32_t value = COLOR_DEFAULT;
+
+        constexpr Color() noexcept = default;
+        constexpr Color(uint32_t val) noexcept : value(val) {}
+        Color(std::string_view name_or_hex);
+        Color(const char* name_or_hex);
+
+        constexpr operator uint32_t() const noexcept { return value; }
+        constexpr bool operator==(const Color& other) const noexcept = default;
+        constexpr bool is_default() const noexcept { return value == COLOR_DEFAULT; }
+
         static constexpr uint32_t Default   = COLOR_DEFAULT;
         static constexpr uint32_t Reset     = COLOR_DEFAULT;
         static constexpr uint32_t Black     = 0x00000000;

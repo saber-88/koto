@@ -34,10 +34,8 @@ namespace koto
             using TextOverflow = koto::TextOverflow;
             using TextAlign = koto::TextAlign;
             Text(std::string_view content = "");
-            Text& fg(std::string_view fg);
-            Text& bg(std::string_view bg);
-            Text& fg(uint32_t fg);
-            Text& bg(uint32_t bg);
+            Text& fg(Color fg);
+            Text& bg(Color bg);
             Text& wrap();
             Text& clip();
             Text& ellipsis();

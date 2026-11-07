@@ -15,6 +15,34 @@ namespace koto
             return std::unexpected(ColorParseError::EmptyString);
         }
 
+        auto iequals = [](std::string_view a, std::string_view b) noexcept -> bool {
+            if (a.size() != b.size()) return false;
+            for (size_t i = 0; i < a.size(); ++i)
+            {
+                char ca = (a[i] >= 'A' && a[i] <= 'Z') ? static_cast<char>(a[i] + ('a' - 'A')) : a[i];
+                char cb = (b[i] >= 'A' && b[i] <= 'Z') ? static_cast<char>(b[i] + ('a' - 'A')) : b[i];
+                if (ca != cb) return false;
+            }
+            return true;
+        };
+
+        if (iequals(color, "default") || iequals(color, "reset")) return COLOR_DEFAULT;
+        if (iequals(color, "black")) return Color::Black;
+        if (iequals(color, "white")) return Color::White;
+        if (iequals(color, "red")) return Color::Red;
+        if (iequals(color, "green")) return Color::Green;
+        if (iequals(color, "blue")) return Color::Blue;
+        if (iequals(color, "yellow")) return Color::Yellow;
+        if (iequals(color, "cyan")) return Color::Cyan;
+        if (iequals(color, "magenta")) return Color::Magenta;
+        if (iequals(color, "gray") || iequals(color, "grey")) return Color::Gray;
+        if (iequals(color, "darkgray") || iequals(color, "darkgrey") || iequals(color, "dark_gray")) return Color::DarkGray;
+        if (iequals(color, "lightgray") || iequals(color, "lightgrey") || iequals(color, "light_gray")) return Color::LightGray;
+        if (iequals(color, "orange")) return Color::Orange;
+        if (iequals(color, "teal")) return Color::Teal;
+        if (iequals(color, "emerald")) return Color::Emerald;
+        if (iequals(color, "amber")) return Color::Amber;
+
         if (color[0] == '#')
         {
             color.remove_prefix(1);
@@ -243,4 +271,12 @@ namespace koto
         // Default to TrueColor on modern systems
         return ColorMode::TrueColor;
     }
+
+    Color::Color(std::string_view name_or_hex)
+        : value(parse_color(name_or_hex))
+    {}
+
+    Color::Color(const char* name_or_hex)
+        : value(name_or_hex ? parse_color(std::string_view(name_or_hex)) : COLOR_DEFAULT)
+    {}
 }

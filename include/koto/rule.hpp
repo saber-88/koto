@@ -17,14 +17,10 @@ namespace koto
         Rule& title(std::string_view title);
         Rule& title_align(TitleAlign align);
         Rule& style(BorderStyle style);
-        Rule& fg(std::string_view fg);
-        Rule& fg(uint32_t fg);
-        Rule& bg(std::string_view bg);
-        Rule& bg(uint32_t bg);
-        Rule& title_fg(std::string_view fg);
-        Rule& title_fg(uint32_t fg);
-        Rule& title_bg(std::string_view bg);
-        Rule& title_bg(uint32_t bg);
+        Rule& fg(Color fg);
+        Rule& bg(Color bg);
+        Rule& title_fg(Color fg);
+        Rule& title_bg(Color bg);
 
         void draw(Frame& frame, Area area) override;
 
