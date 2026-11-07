@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "GCC 13 (C++23) - Release"
+            cxx: g++-13
+            cc: gcc-13
+            build_type: Release
+            install_pkgs: gcc-13 g++-13
+
+          - name: "Clang 17 (C++23) - Release"
+            cxx: clang++-17
+            cc: clang-17
+            build_type: Release
+            install_pkgs: clang-17
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Compiler & Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.install_pkgs }} ninja-build cmake
+
+      - name: Configure CMake
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -D_FORTIFY_SOURCE=2"
+
+      - name: Build Project
+        run: |
+          cmake --build build --parallel $(nproc)
+
+      - name: Run Test Suite
+        run: |
+          ctest --test-dir build --output-on-failure

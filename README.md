@@ -3,7 +3,7 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux-orange.svg?logo=linux)](https://kernel.org)
-[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-25%20Passing-brightgreen.svg)]()
+[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-31%20Passing-brightgreen.svg)]()
 [![CJK & Unicode](https://img.shields.io/badge/Unicode-7%20Passing-brightgreen.svg)]()
 [![Zero Warnings](https://img.shields.io/badge/Compiler%20Warnings-Zero-brightgreen.svg)]()
 
@@ -119,8 +119,8 @@ int main()
     });
 
     app.on_render([&](Frame& frame) {
-        // Divide frame into 3 vertical regions
-        auto sections = Layout::vertical(frame.area(), {
+        // Zero-heap structured bindings via compile-time NTTP array deduction
+        auto [header, list_area, footer] = Layout::vertical(frame.area(), {
             Constraint::fixed(3), // Header box
             Constraint::fill(),   // List viewport
             Constraint::fixed(1), // Footer status bar
@@ -131,18 +131,18 @@ int main()
             .title(" koto Task Manager ")
             .title_align(TitleAlign::Left)
             .fg(Color::Cyan)
-            .draw(frame, sections[0]);
+            .draw(frame, header);
 
         List(todo)
             .border_style(BorderStyle::Single)
             .highlight_fg(Color::Emerald)
             .highlight_bg(Color::Rgb(0, 40, 30))
             .highlight_symbol("▶ ")
-            .draw(frame, sections[1]);
+            .draw(frame, list_area);
 
         Text("Navigate: [j/k or ↑/↓] | Quit: [Ctrl+Q]")
             .fg(Color::DarkGray)
-            .draw(frame, sections[2]);
+            .draw(frame, footer);
     });
 
     app.run();
