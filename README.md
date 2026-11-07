@@ -3,7 +3,7 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux-orange.svg?logo=linux)](https://kernel.org)
-[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-31%20Passing-brightgreen.svg)]()
+[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-32%20Passing-brightgreen.svg)]()
 [![CJK & Unicode](https://img.shields.io/badge/Unicode-7%20Passing-brightgreen.svg)]()
 [![Zero Warnings](https://img.shields.io/badge/Compiler%20Warnings-Zero-brightgreen.svg)]()
 
