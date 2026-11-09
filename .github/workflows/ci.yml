@@ -18,12 +18,28 @@ jobs:
             cxx: g++-13
             cc: gcc-13
             build_type: Release
+            cxx_flags: "-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -D_FORTIFY_SOURCE=2 -O2"
+            install_pkgs: gcc-13 g++-13
+
+          - name: "GCC 13 (C++23) - Debug + ASan/UBSan"
+            cxx: g++-13
+            cc: gcc-13
+            build_type: Debug
+            cxx_flags: "-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -fsanitize=address,undefined -fno-omit-frame-pointer -g"
             install_pkgs: gcc-13 g++-13
 
           - name: "Clang 17 (C++23) - Release"
             cxx: clang++-17
             cc: clang-17
             build_type: Release
+            cxx_flags: "-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -D_FORTIFY_SOURCE=2 -O2"
+            install_pkgs: clang-17
+
+          - name: "Clang 17 (C++23) - Debug + ASan/UBSan"
+            cxx: clang++-17
+            cc: clang-17
+            build_type: Debug
+            cxx_flags: "-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -fsanitize=address,undefined -fno-omit-frame-pointer -g"
             install_pkgs: clang-17
 
     steps:
@@ -42,12 +58,15 @@ jobs:
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -D_FORTIFY_SOURCE=2"
+            -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}"
 
       - name: Build Project
         run: |
           cmake --build build --parallel $(nproc)
 
       - name: Run Test Suite
+        env:
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1"
+          UBSAN_OPTIONS: "print_stacktrace=1:abort_on_error=1"
         run: |
           ctest --test-dir build --output-on-failure

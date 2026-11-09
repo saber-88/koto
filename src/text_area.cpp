@@ -105,7 +105,7 @@ namespace koto
         align_cursor_to_utf8(line, this->cursor_col);
         line.insert(this->cursor_col, encoded.view());
         this->cursor_col += encoded.size;
-        this->preferred_col = this->cursor_col;
+        this->preferred_col = static_cast<size_t>(compute_visual_col(line, this->cursor_col));
     }
 
     void TextAreaState::insert(std::string_view str)
@@ -143,18 +143,10 @@ namespace koto
 
         if (this->cursor_col > 0)
         {
-            if (this->cursor_col > line.size())
-            {
-                this->cursor_col = line.size();
-            }
-            size_t prev = this->cursor_col - 1;
-            while (prev > 0 && (static_cast<uint8_t>(line[prev]) & 0xC0) == 0x80)
-            {
-                prev--;
-            }
+            size_t prev = prev_grapheme_offset(line, this->cursor_col);
             line.erase(prev, this->cursor_col - prev);
             this->cursor_col = prev;
-            this->preferred_col = this->cursor_col;
+            this->preferred_col = static_cast<size_t>(compute_visual_col(line, this->cursor_col));
         }
         else if (this->cursor_col == 0 && this->cursor_row > 0)
         {
@@ -163,7 +155,7 @@ namespace koto
             this->text.erase(this->text.begin() + static_cast<std::ptrdiff_t>(this->cursor_row));
             this->cursor_row--;
             this->cursor_col = prev_len;
-            this->preferred_col = this->cursor_col;
+            this->preferred_col = static_cast<size_t>(compute_visual_col(this->text[this->cursor_row], this->cursor_col));
         }
     }
 
@@ -174,11 +166,7 @@ namespace koto
 
         if (this->cursor_col < line.size())
         {
-            size_t next = this->cursor_col + 1;
-            while (next < line.size() && (static_cast<uint8_t>(line[next]) & 0xC0) == 0x80)
-            {
-                next++;
-            }
+            size_t next = next_grapheme_offset(line, this->cursor_col);
             line.erase(this->cursor_col, next - this->cursor_col);
         }
         else if (this->cursor_col >= line.size() && this->cursor_row + 1 < this->text.size())
@@ -194,23 +182,14 @@ namespace koto
         if (this->cursor_col > 0)
         {
             auto& line = this->text[this->cursor_row];
-            if (this->cursor_col > line.size())
-            {
-                this->cursor_col = line.size();
-            }
-            size_t prev = this->cursor_col - 1;
-            while (prev > 0 && (static_cast<uint8_t>(line[prev]) & 0xC0) == 0x80)
-            {
-                prev--;
-            }
-            this->cursor_col = prev;
-            this->preferred_col = this->cursor_col;
+            this->cursor_col = prev_grapheme_offset(line, this->cursor_col);
+            this->preferred_col = static_cast<size_t>(compute_visual_col(line, this->cursor_col));
         }
         else if (this->cursor_col == 0 && this->cursor_row > 0)
         {
             this->cursor_row--;
             this->cursor_col = this->text[this->cursor_row].size();
-            this->preferred_col = this->cursor_col;
+            this->preferred_col = static_cast<size_t>(compute_visual_col(this->text[this->cursor_row], this->cursor_col));
         }
     }
 
@@ -220,19 +199,14 @@ namespace koto
         auto& line = this->text[this->cursor_row];
         if (this->cursor_col < line.size())
         {
-            size_t next = this->cursor_col + 1;
-            while (next < line.size() && (static_cast<uint8_t>(line[next]) & 0xC0) == 0x80)
-            {
-                next++;
-            }
-            this->cursor_col = next;
-            this->preferred_col = this->cursor_col;
+            this->cursor_col = next_grapheme_offset(line, this->cursor_col);
+            this->preferred_col = static_cast<size_t>(compute_visual_col(line, this->cursor_col));
         }
         else if (this->cursor_col >= line.size() && this->cursor_row + 1 < this->text.size())
         {
             this->cursor_row++;
             this->cursor_col = 0;
-            this->preferred_col = this->cursor_col;
+            this->preferred_col = 0;
         }
     }
 
@@ -242,16 +216,17 @@ namespace koto
         if (this->cursor_row > 0)
         {
             this->cursor_row--;
+            auto& line = this->text[this->cursor_row];
             if (this->cursor_mode == CursorColumnMode::Sticky)
             {
-                this->cursor_col = std::min(this->preferred_col, this->text[this->cursor_row].size());
+                this->cursor_col = visual_col_to_byte_offset(line, static_cast<int>(this->preferred_col));
             }
             else
             {
-                this->cursor_col = std::min(this->cursor_col, this->text[this->cursor_row].size());
-                this->preferred_col = this->cursor_col;
+                int current_vis = compute_visual_col(line, this->cursor_col);
+                this->cursor_col = visual_col_to_byte_offset(line, current_vis);
+                this->preferred_col = static_cast<size_t>(current_vis);
             }
-            align_cursor_to_utf8(this->text[this->cursor_row], this->cursor_col);
         }
     }
 
@@ -261,16 +236,17 @@ namespace koto
         if (this->cursor_row + 1 < this->text.size())
         {
             this->cursor_row++;
+            auto& line = this->text[this->cursor_row];
             if (this->cursor_mode == CursorColumnMode::Sticky)
             {
-                this->cursor_col = std::min(this->preferred_col, this->text[this->cursor_row].size());
+                this->cursor_col = visual_col_to_byte_offset(line, static_cast<int>(this->preferred_col));
             }
             else
             {
-                this->cursor_col = std::min(this->cursor_col, this->text[this->cursor_row].size());
-                this->preferred_col = this->cursor_col;
+                int current_vis = compute_visual_col(line, this->cursor_col);
+                this->cursor_col = visual_col_to_byte_offset(line, current_vis);
+                this->preferred_col = static_cast<size_t>(current_vis);
             }
-            align_cursor_to_utf8(this->text[this->cursor_row], this->cursor_col);
         }
     }
 
@@ -283,8 +259,9 @@ namespace koto
     void TextAreaState::move_end()
     {
         clamp_state(*this);
-        this->cursor_col = this->text[this->cursor_row].size();
-        this->preferred_col = this->cursor_col;
+        auto& line = this->text[this->cursor_row];
+        this->cursor_col = line.size();
+        this->preferred_col = static_cast<size_t>(compute_visual_col(line, this->cursor_col));
     }
 
     void TextAreaState::clear()
@@ -679,13 +656,14 @@ namespace koto
 
                 while (!remaining.empty())
                 {
-                    char32_t cp = next_codepoint(remaining);
-                    int w = codepoint_width(cp);
+                    Grapheme g = next_grapheme(remaining);
+                    if (g.empty()) break;
+                    int w = g.width;
                     int rel_col = cur_x - static_cast<int>(m_state.scroll_col);
 
                     if (rel_col >= 0 && rel_col + w <= content_area.width)
                     {
-                        frame.set_cell(screen_row, content_area.col + rel_col, {cp, m_fg, m_bg});
+                        frame.set_cell(screen_row, content_area.col + rel_col, Cell{g, m_fg, m_bg});
                     }
                     cur_x += w;
                 }

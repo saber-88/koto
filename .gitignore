@@ -1,2 +1,5 @@
 /.cache
 /build
+/build_debug
+*.zip
+

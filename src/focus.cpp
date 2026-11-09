@@ -135,15 +135,113 @@ namespace koto
             .id = scoped,
             .bounds = Area{0, 0, 0, 0},
             .modal_scope = current_modal,
+            .enabled = true,
+            .visible = true,
             .set_focus = nullptr,
             .handle_key = std::move(on_key),
             .handle_mouse = std::move(on_mouse),
+            .handle_paste = nullptr,
             .on_focus = nullptr,
             .on_blur = nullptr
         };
 
         this->register_target(std::move(target));
         return *this;
+    }
+
+    bool FocusManager::has_geometry() const noexcept
+    {
+        for (const auto& t : m_targets)
+        {
+            if (t.bounds.is_valid() && t.bounds.width > 0 && t.bounds.height > 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool FocusManager::remove(Id id)
+    {
+        Id scoped = this->scoped_id(id);
+        for (auto it = m_targets.begin(); it != m_targets.end(); ++it)
+        {
+            if (it->id == scoped || it->id == id)
+            {
+                size_t idx = static_cast<size_t>(std::distance(m_targets.begin(), it));
+                if (idx == m_active_index)
+                {
+                    if (it->set_focus) it->set_focus(false);
+                    if (it->on_blur) it->on_blur();
+                }
+                m_targets.erase(it);
+                if (m_active_index >= m_targets.size() && !m_targets.empty())
+                {
+                    m_active_index = m_targets.size() - 1;
+                    if (m_targets[m_active_index].set_focus) m_targets[m_active_index].set_focus(true);
+                }
+#ifndef NDEBUG
+                m_debug_pointer_registry.erase(scoped.value());
+                m_debug_pointer_registry.erase(id.value());
+#endif
+                return true;
+            }
+        }
+        return false;
+    }
+
+    FocusManager& FocusManager::set_visible(Id id, bool visible)
+    {
+        Id scoped = this->scoped_id(id);
+        for (auto& t : m_targets)
+        {
+            if (t.id == scoped || t.id == id)
+            {
+                t.visible = visible;
+                break;
+            }
+        }
+        return *this;
+    }
+
+    FocusManager& FocusManager::set_enabled(Id id, bool enabled)
+    {
+        Id scoped = this->scoped_id(id);
+        for (auto& t : m_targets)
+        {
+            if (t.id == scoped || t.id == id)
+            {
+                t.enabled = enabled;
+                break;
+            }
+        }
+        return *this;
+    }
+
+    bool FocusManager::is_visible(Id id) const
+    {
+        Id scoped = this->scoped_id(id);
+        for (const auto& t : m_targets)
+        {
+            if (t.id == scoped || t.id == id)
+            {
+                return t.visible;
+            }
+        }
+        return false;
+    }
+
+    bool FocusManager::is_enabled(Id id) const
+    {
+        Id scoped = this->scoped_id(id);
+        for (const auto& t : m_targets)
+        {
+            if (t.id == scoped || t.id == id)
+            {
+                return t.enabled;
+            }
+        }
+        return false;
     }
 
     bool FocusManager::next()
@@ -154,12 +252,14 @@ namespace koto
         }
 
         Id current_modal = this->active_modal_scope();
+        bool req_geom = this->has_geometry();
 
         size_t next_idx = m_active_index;
         for (size_t step = 1; step <= m_targets.size(); ++step)
         {
             size_t cand_idx = (m_active_index + step) % m_targets.size();
-            if (m_targets[cand_idx].modal_scope == current_modal)
+            const auto& cand = m_targets[cand_idx];
+            if (cand.modal_scope == current_modal && cand.is_focusable(req_geom))
             {
                 next_idx = cand_idx;
                 break;
@@ -181,12 +281,14 @@ namespace koto
         }
 
         Id current_modal = this->active_modal_scope();
+        bool req_geom = this->has_geometry();
 
         size_t prev_idx = m_active_index;
         for (size_t step = 1; step <= m_targets.size(); ++step)
         {
             size_t cand_idx = (m_active_index + m_targets.size() - step) % m_targets.size();
-            if (m_targets[cand_idx].modal_scope == current_modal)
+            const auto& cand = m_targets[cand_idx];
+            if (cand.modal_scope == current_modal && cand.is_focusable(req_geom))
             {
                 prev_idx = cand_idx;
                 break;
@@ -279,6 +381,16 @@ namespace koto
             else
             {
                 target.bounds = Area{0, 0, 0, 0};
+            }
+        }
+
+        // If the currently focused widget was hidden or collapsed off-screen,
+        // automatically advance focus to a visible target
+        if (m_active_index < m_targets.size() && this->has_geometry())
+        {
+            if (!m_targets[m_active_index].is_focusable(true))
+            {
+                this->next();
             }
         }
     }
@@ -410,6 +522,9 @@ namespace koto
         m_active_index = 0;
         m_scope_stack.clear();
         m_saved_focus_stack.clear();
+#ifndef NDEBUG
+        m_debug_pointer_registry.clear();
+#endif
     }
 
     bool FocusManager::handle_key(const KeyEvent& key)
@@ -463,6 +578,21 @@ namespace koto
             if (key.is(Key::Right)) return this->move(Direction::Right);
         }
 
+        return false;
+    }
+
+    bool FocusManager::handle_paste(const std::string& text)
+    {
+        if (m_targets.empty() || m_active_index >= m_targets.size())
+        {
+            return false;
+        }
+
+        auto& target = m_targets[m_active_index];
+        if (target.handle_paste)
+        {
+            return target.handle_paste(text);
+        }
         return false;
     }
 

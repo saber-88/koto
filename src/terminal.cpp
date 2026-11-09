@@ -5,6 +5,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <expected>
 #include <termios.h>
 #include <unistd.h>
@@ -15,7 +16,13 @@ namespace
     termios g_saved{};
     volatile std::sig_atomic_t g_saved_valid = 0;
     struct sigaction g_old_term{}, g_old_hup{}, g_old_int{}, g_old_quit{};
+    struct sigaction g_old_segv{}, g_old_abrt{}, g_old_bus{}, g_old_fpe{}, g_old_ill{};
     bool g_atexit_registered = false;
+    bool g_hup_installed = false;
+    std::terminate_handler g_old_terminate = nullptr;
+    stack_t g_altstack{};
+    constexpr size_t ALT_STACK_SIZE = 64 * 1024;
+    alignas(16) char g_altstack_buf[ALT_STACK_SIZE];
 
     void restore_minimal() noexcept
     {        
@@ -30,10 +37,57 @@ namespace
         errno = saved_errno;
     }
 
-    void on_fatal_signal(int sig)
+    static const struct sigaction* get_old_sigaction(int sig) noexcept
+    {
+        switch (sig)
+        {
+            case SIGTERM: return &g_old_term;
+            case SIGHUP:  return &g_old_hup;
+            case SIGINT:  return &g_old_int;
+            case SIGQUIT: return &g_old_quit;
+            case SIGSEGV: return &g_old_segv;
+            case SIGABRT: return &g_old_abrt;
+            case SIGBUS:  return &g_old_bus;
+            case SIGFPE:  return &g_old_fpe;
+            case SIGILL:  return &g_old_ill;
+            default:      return nullptr;
+        }
+    }
+
+    void on_fatal_signal(int sig, siginfo_t* info, void* ucontext)
     {
         restore_minimal();
+
+        // Chain to previous signal handler if one was registered (R4 fix)
+        const struct sigaction* old_sa = get_old_sigaction(sig);
+        if (old_sa)
+        {
+            if ((old_sa->sa_flags & SA_SIGINFO) && old_sa->sa_sigaction)
+            {
+                old_sa->sa_sigaction(sig, info, ucontext);
+                return;
+            }
+            if (old_sa->sa_handler != SIG_DFL && old_sa->sa_handler != SIG_IGN)
+            {
+                old_sa->sa_handler(sig);
+                return;
+            }
+        }
+
         raise(sig);
+    }
+
+    void on_terminate() noexcept
+    {
+        restore_minimal();
+        if (g_old_terminate)
+        {
+            g_old_terminate();
+        }
+        else
+        {
+            std::abort();
+        }
     }
 
     void install_handlers()
@@ -42,24 +96,68 @@ namespace
         {
             std::atexit(restore_minimal);
             g_atexit_registered = true;
+            g_old_terminate = std::set_terminate(on_terminate);
+
+            // Install alternate signal stack for safe crash handling (e.g. stack overflow)
+            g_altstack.ss_sp = g_altstack_buf;
+            g_altstack.ss_size = sizeof(g_altstack_buf);
+            g_altstack.ss_flags = 0;
+            static_cast<void>(sigaltstack(&g_altstack, nullptr));
         }
 
         struct sigaction sa{};
-        sa.sa_handler = on_fatal_signal;
+        sa.sa_sigaction = on_fatal_signal;
         sigemptyset(&sa.sa_mask);
-        sa.sa_flags = static_cast<int>(SA_RESETHAND);
+        sa.sa_flags = static_cast<int>(SA_RESETHAND | SA_SIGINFO);
+
         sigaction(SIGTERM, &sa, &g_old_term);
-        sigaction(SIGHUP,  &sa, &g_old_hup);
         sigaction(SIGINT,  &sa, &g_old_int);
         sigaction(SIGQUIT, &sa, &g_old_quit);
+
+        // Preserve inherited SIG_IGN on SIGHUP (e.g. when run under nohup)
+        struct sigaction existing_hup{};
+        if (sigaction(SIGHUP, nullptr, &existing_hup) == 0 && existing_hup.sa_handler != SIG_IGN)
+        {
+            sigaction(SIGHUP, &sa, &g_old_hup);
+            g_hup_installed = true;
+        }
+
+        // Install crash recovery handlers on the alternate signal stack with previous handler chaining (R4)
+        struct sigaction sa_crash{};
+        sa_crash.sa_sigaction = on_fatal_signal;
+        sigemptyset(&sa_crash.sa_mask);
+        sa_crash.sa_flags = static_cast<int>(SA_RESETHAND | SA_ONSTACK | SA_SIGINFO);
+
+        sigaction(SIGSEGV, &sa_crash, &g_old_segv);
+        sigaction(SIGABRT, &sa_crash, &g_old_abrt);
+        sigaction(SIGBUS,  &sa_crash, &g_old_bus);
+        sigaction(SIGFPE,  &sa_crash, &g_old_fpe);
+        sigaction(SIGILL,  &sa_crash, &g_old_ill);
     }
 
     void uninstall_handlers()
     {
         sigaction(SIGTERM, &g_old_term, nullptr);
-        sigaction(SIGHUP,  &g_old_hup,  nullptr);
+        if (g_hup_installed)
+        {
+            sigaction(SIGHUP,  &g_old_hup,  nullptr);
+            g_hup_installed = false;
+        }
         sigaction(SIGINT,  &g_old_int,  nullptr);
         sigaction(SIGQUIT, &g_old_quit, nullptr);
+
+        sigaction(SIGSEGV, &g_old_segv, nullptr);
+        sigaction(SIGABRT, &g_old_abrt, nullptr);
+        sigaction(SIGBUS,  &g_old_bus,  nullptr);
+        sigaction(SIGFPE,  &g_old_fpe,  nullptr);
+        sigaction(SIGILL,  &g_old_ill,  nullptr);
+
+        if (g_old_terminate)
+        {
+            std::set_terminate(g_old_terminate);
+            g_old_terminate = nullptr;
+        }
+
         g_saved_valid = 0;
     }
 }
@@ -282,10 +380,6 @@ namespace koto
         m_is_tty = (isatty(STDIN_FILENO) != 0 && isatty(STDOUT_FILENO) != 0);
         m_color_mode = detect_system_color_mode();
         set_dimensions();
-        if (m_is_tty)
-        {
-            static_cast<void>(enter_raw_mode());
-        }
     }
 
     Terminal::~Terminal()

@@ -118,6 +118,12 @@ int main()
     update_focus();
 
     app.on_key([&](const KeyEvent& key) {
+        if (key.ctrl && (key.ch == 'q' || key.ch == 'Q'))
+        {
+            app.quit();
+            return;
+        }
+
         // Tab / Shift+Tab: cycle focus across the 3 inputs
         if (key.is(Key::BackTab))
         {

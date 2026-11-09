@@ -3,10 +3,12 @@
 #include "koto/event.hpp"
 #include "koto/frame.hpp"
 #include "koto/id.hpp"
+#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <functional>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -32,6 +34,11 @@ namespace koto
     template<typename T>
     concept HasMouseHandler = requires(T& s, const MouseEvent& m) {
         { s.handle_mouse(m) } -> std::convertible_to<bool>;
+    };
+
+    template<typename T>
+    concept HasPasteHandler = requires(T& s, const std::string& str) {
+        { s.insert(str) };
     };
 
     // Forward declaration of FocusManager for IdScope
@@ -98,15 +105,35 @@ namespace koto
         Id id;
         Area bounds = Area{0, 0, 0, 0};
         Id modal_scope = Id::none();
+        bool enabled = true;
+        bool visible = true;
         std::function<void(bool)> set_focus;                 // updates .focused on the underlying state
         std::function<bool(const KeyEvent&)> handle_key;     // routes key event to the underlying state
         std::function<bool(const MouseEvent&)> handle_mouse; // routes mouse event to the underlying state
+        std::function<bool(const std::string&)> handle_paste;// routes paste event to the underlying state
         std::function<void()> on_focus;                      // optional user hook when focus gained
         std::function<void()> on_blur;                       // optional user hook when focus lost
+
+        bool is_focusable(bool require_geometry = true) const noexcept
+        {
+            if (!enabled || !visible) return false;
+            if (require_geometry)
+            {
+                return bounds.is_valid() && bounds.width > 0 && bounds.height > 0;
+            }
+            return true;
+        }
     };
 
     // =========================================================================
     // FocusManager: Centralized Keyboard Navigation & Mouse Click Focus Engine
+    //
+    // LIFETIME CONTRACT (R6):
+    // FocusManager captures non-owning references [&state] to user widget states.
+    // Callers MUST guarantee either:
+    // 1. Registered widget states outlive the FocusManager (standard RAII / application scope), OR
+    // 2. Call fm.remove(state) or fm.remove(id) before the widget state is destroyed, OR
+    // 3. Register within an IdScope (modal), which auto-prunes out-of-scope targets on dismissal.
     // =========================================================================
     class FocusManager
     {
@@ -122,19 +149,42 @@ namespace koto
             Id scoped = this->scoped_id(id);
             Id current_modal = this->active_modal_scope();
 
+#ifndef NDEBUG
+            // Debug check for 32-bit hash Id collisions between distinct states (R6)
+            auto it = m_debug_pointer_registry.find(scoped.value());
+            if (it != m_debug_pointer_registry.end())
+            {
+                assert(it->second == static_cast<const void*>(&state) &&
+                       "FocusManager: 32-bit Id hash collision detected between two distinct state objects!");
+            }
+            m_debug_pointer_registry[scoped.value()] = static_cast<const void*>(&state);
+#endif
+
             std::function<bool(const MouseEvent&)> mouse_handler = nullptr;
             if constexpr (HasMouseHandler<T>)
             {
                 mouse_handler = [&state](const MouseEvent& m) { return state.handle_mouse(m); };
             }
 
+            std::function<bool(const std::string&)> paste_handler = nullptr;
+            if constexpr (HasPasteHandler<T>)
+            {
+                paste_handler = [&state](const std::string& str) {
+                    state.insert(str);
+                    return true;
+                };
+            }
+
             FocusTarget target{
                 .id = scoped,
                 .bounds = Area{0, 0, 0, 0},
                 .modal_scope = current_modal,
+                .enabled = true,
+                .visible = true,
                 .set_focus = [&state](bool f) { state.focused = f; },
                 .handle_key = [&state](const KeyEvent& k) { return state.handle_event(k); },
                 .handle_mouse = std::move(mouse_handler),
+                .handle_paste = std::move(paste_handler),
                 .on_focus = nullptr,
                 .on_blur = nullptr
             };
@@ -149,6 +199,23 @@ namespace koto
 
         // 3. Register or update a type-erased FocusTarget in-place
         void register_target(FocusTarget target);
+
+        // Target Removal & State Lifecycle (Prevents dangling references)
+        bool remove(Id id);
+
+        template<typename T>
+        requires FocusableState<std::remove_cvref_t<T>>
+        bool remove(const T& state)
+        {
+            return remove(Id(&state));
+        }
+
+        // Visibility & Enablement controls (Fixes H2)
+        FocusManager& set_visible(Id id, bool visible);
+        FocusManager& set_enabled(Id id, bool enabled);
+        bool is_visible(Id id) const;
+        bool is_enabled(Id id) const;
+        bool has_geometry() const noexcept;
 
         // Navigation (Tab / Shift+Tab / Index / Id / State)
         bool next();                               // Tab forward
@@ -194,6 +261,7 @@ namespace koto
         // Forwards keys to the active focus target.
         // Returns true if consumed, false if unhandled (passes to global hotkeys).
         bool handle_key(const KeyEvent& key);
+        bool handle_paste(const std::string& text);
 
         // Navigation Policy & Spatial Settings
         FocusManager& navigation_policy(FocusNavPolicy policy) noexcept;
@@ -249,5 +317,9 @@ namespace koto
         FocusKeyInterceptor m_key_interceptor = nullptr;
         FocusChangeValidator m_change_validator = nullptr;
         FocusChangeObserver m_change_observer = nullptr;
+
+#ifndef NDEBUG
+        std::unordered_map<uint32_t, const void*> m_debug_pointer_registry;
+#endif
     };
 }

@@ -626,6 +626,93 @@ namespace koto
         return TickEvent{};
     }
 
+    bool EventLoop::has_pending_event() const noexcept
+    {
+        if (m_pending_input.empty())
+        {
+            return false;
+        }
+
+        ParseResult res = parse_step(m_pending_input);
+        if (res.status == ParseStatus::Complete || res.status == ParseStatus::Invalid)
+        {
+            return true;
+        }
+
+        // Bracketed paste is an atomic multi-byte stream; do NOT abort on short escape timeout (R1 fix)
+        if (m_pending_input.starts_with("\033[200~"))
+        {
+            return false;
+        }
+
+        // Short incomplete sequences (ESC disambiguation or partial UTF-8):
+        if (m_escape_deadline == std::chrono::steady_clock::time_point{})
+        {
+            m_escape_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(35);
+            return false;
+        }
+        if (std::chrono::steady_clock::now() >= m_escape_deadline)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    auto EventLoop::flush_incomplete_escape() -> Event
+    {
+        m_escape_deadline = {};
+        if (m_pending_input.empty())
+        {
+            return TickEvent{};
+        }
+
+        // Bracketed paste must never be torn apart by flush_incomplete_escape (R1 fix)
+        if (m_pending_input.starts_with("\033[200~"))
+        {
+            return TickEvent{};
+        }
+
+        if (m_pending_input[0] != '\033')
+        {
+            // Truncated/stale non-ESC byte (e.g. orphaned UTF-8 lead byte, R5 fix)
+            m_pending_input.erase(0, 1);
+            return TickEvent{};
+        }
+
+        // 1. Lone Escape prefix ("\033")
+        if (m_pending_input.size() == 1)
+        {
+            m_pending_input.clear();
+            return KeyEvent{static_cast<uint32_t>(Key::Escape)};
+        }
+
+        // 2. Alt + '[' ("\033[")
+        if (m_pending_input == "\033[")
+        {
+            m_pending_input.clear();
+            return KeyEvent{static_cast<uint32_t>('['), false, false, true, false};
+        }
+
+        // 3. Alt + Shift + 'O' ("\033O")
+        if (m_pending_input == "\033O")
+        {
+            m_pending_input.clear();
+            return KeyEvent{static_cast<uint32_t>('O'), false, true, true, false};
+        }
+
+        // 4. Alt + ']' ("\033]")
+        if (m_pending_input == "\033]")
+        {
+            m_pending_input.clear();
+            return KeyEvent{static_cast<uint32_t>(']'), false, false, true, false};
+        }
+
+        // 5. Incomplete / unrecognized escape sequence: emit Escape, leave remaining bytes
+        m_pending_input.erase(0, 1);
+        return KeyEvent{static_cast<uint32_t>(Key::Escape)};
+    }
+
     auto EventLoop::parse_stdin() -> Event
     {
         if (m_pending_input.empty())
@@ -637,46 +724,39 @@ namespace koto
 
         if (res.status == ParseStatus::Complete)
         {
+            m_escape_deadline = {};
             m_pending_input.erase(0, res.consumed);
             return res.event;
         }
 
         if (res.status == ParseStatus::Incomplete)
         {
-            // If solitary ESC, wait up to 35ms on stdin to see if a sequence follows
-            if (m_pending_input.size() == 1 && m_pending_input[0] == '\033')
+            // Do NOT apply short timeout to bracketed paste (R1 fix)
+            if (m_pending_input.starts_with("\033[200~"))
             {
-                struct pollfd pfd = {m_eof ? -1 : STDIN_FILENO, POLLIN, 0};
-                if (!m_eof && ::poll(&pfd, 1, 35) > 0 && (pfd.revents & POLLIN))
-                {
-                    char extra[256] = {};
-                    ssize_t extra_n = read(STDIN_FILENO, extra, sizeof(extra));
-                    if (extra_n > 0)
-                    {
-                        m_pending_input.append(extra, static_cast<size_t>(extra_n));
-                        return parse_stdin();
-                    }
-                    else if (extra_n == 0)
-                    {
-                        m_eof = true;
-                    }
-                }
-
-                // Timed out or EOF: standalone Escape key!
-                m_pending_input.clear();
-                return KeyEvent{static_cast<uint32_t>(Key::Escape)};
+                return TickEvent{};
             }
 
-            // Incomplete multi-byte sequence (CSI, mouse, paste, UTF-8):
-            // Return TickEvent{} and KEEP m_pending_input INTACT!
+            // Establish or check 35ms deadline for short sequences
+            if (m_escape_deadline == std::chrono::steady_clock::time_point{})
+            {
+                m_escape_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(35);
+            }
+            else if (std::chrono::steady_clock::now() >= m_escape_deadline)
+            {
+                return flush_incomplete_escape();
+            }
+
             return TickEvent{};
         }
 
         // Invalid sequence / malformed byte: drop bad byte
         size_t to_drop = res.consumed > 0 ? res.consumed : 1;
         m_pending_input.erase(0, to_drop);
+        if (m_pending_input.empty()) m_escape_deadline = {};
         return TickEvent{};
     }
+
     auto EventLoop::on_sigwinch([[maybe_unused]] int signum) -> void
     {
         int saved_errno = errno;
@@ -690,10 +770,10 @@ namespace koto
 
     auto EventLoop::wakeup() noexcept -> void
     {
-        if (m_pipe_write_fd >= 0)
+        if (m_pipe_fds[1] >= 0)
         {
             char b = 'W';
-            [[maybe_unused]] ssize_t written = write(static_cast<int>(m_pipe_write_fd), &b, 1);
+            [[maybe_unused]] ssize_t written = ::write(m_pipe_fds[1], &b, 1);
         }
     }
 
@@ -705,6 +785,7 @@ namespace koto
             ParseResult res = parse_step(m_pending_input);
             if (res.status == ParseStatus::Complete)
             {
+                m_escape_deadline = {};
                 m_pending_input.erase(0, res.consumed);
                 return res.event;
             }
@@ -712,9 +793,25 @@ namespace koto
             {
                 size_t to_drop = res.consumed > 0 ? res.consumed : 1;
                 m_pending_input.erase(0, to_drop);
+                if (m_pending_input.empty()) m_escape_deadline = {};
                 return poll(0);
             }
-            // Incomplete: fall through to poll() below to wait for stdin / self-pipe!
+            // ParseStatus::Incomplete:
+            if (!m_pending_input.starts_with("\033[200~"))
+            {
+                if (m_escape_deadline == std::chrono::steady_clock::time_point{})
+                {
+                    m_escape_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(35);
+                }
+                else if (std::chrono::steady_clock::now() >= m_escape_deadline)
+                {
+                    return flush_incomplete_escape();
+                }
+            }
+        }
+        else
+        {
+            m_escape_deadline = {};
         }
 
         // 2. Wait for stdin or self-pipe (SIGWINCH resize / async wakeup)
@@ -725,11 +822,18 @@ namespace koto
         };
 
         int eff_timeout = timeout_ms;
-        if (!m_pending_input.empty() && m_pending_input.size() == 1 && m_pending_input[0] == '\033')
+        if (!m_pending_input.starts_with("\033[200~") && m_escape_deadline != std::chrono::steady_clock::time_point{})
         {
-            if (eff_timeout < 0 || eff_timeout > 35)
+            auto now = std::chrono::steady_clock::now();
+            if (now >= m_escape_deadline)
             {
-                eff_timeout = 35;
+                return flush_incomplete_escape();
+            }
+            auto rem_ms = std::chrono::duration_cast<std::chrono::milliseconds>(m_escape_deadline - now).count();
+            int esc_rem = static_cast<int>(std::max<int64_t>(1, rem_ms));
+            if (eff_timeout < 0 || eff_timeout > esc_rem)
+            {
+                eff_timeout = esc_rem;
             }
         }
 
@@ -737,12 +841,11 @@ namespace koto
 
         if (ret <= 0)
         {
-            if (!m_pending_input.empty())
+            if (!m_pending_input.starts_with("\033[200~") && m_escape_deadline != std::chrono::steady_clock::time_point{})
             {
-                if (m_pending_input.size() == 1 && m_pending_input[0] == '\033')
+                if (std::chrono::steady_clock::now() >= m_escape_deadline)
                 {
-                    m_pending_input.clear();
-                    return KeyEvent{static_cast<uint32_t>(Key::Escape)};
+                    return flush_incomplete_escape();
                 }
             }
             return TickEvent{};
@@ -785,7 +888,7 @@ namespace koto
                     ssize_t n = read(STDIN_FILENO, buf, to_read);
                     if (n <= 0)
                     {
-                        if (n == 0) m_eof = true;
+                        if (n == 0 || errno == EIO || errno == EBADF) m_eof = true;
                         break;
                     }
                     m_pending_input.append(buf, static_cast<size_t>(n));
@@ -800,10 +903,16 @@ namespace koto
                 {
                     m_pending_input.append(buf, static_cast<size_t>(n));
                 }
-                else if (n == 0)
+                else if (n == 0 || errno == EIO || errno == EBADF)
                 {
                     m_eof = true;
                 }
+            }
+
+            // Reset deadline on new incoming bytes (R1 fix)
+            if (m_escape_deadline != std::chrono::steady_clock::time_point{})
+            {
+                m_escape_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(35);
             }
 
             return parse_stdin();

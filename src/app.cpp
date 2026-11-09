@@ -97,43 +97,47 @@ namespace koto
             {
                 m_paste_handler(paste->text);
                 m_needs_draw = true;
+                return;
             }
-            else
-            {
-                std::string_view remaining = paste->text;
-                while (!remaining.empty())
-                {
-                    char32_t cp = next_codepoint(remaining);
-                    if (cp != 0)
-                    {
-                        KeyEvent ke{};
-                        if (cp == '\n')
-                        {
-                            ke.ch = static_cast<uint32_t>(Key::Enter);
-                        }
-                        else if (cp == '\t')
-                        {
-                            ke.ch = static_cast<uint32_t>(Key::Tab);
-                        }
-                        else
-                        {
-                            ke.ch = static_cast<uint32_t>(cp);
-                            if (cp >= 'A' && cp <= 'Z') ke.shift = true;
-                        }
 
-                        bool consumed = false;
-                        if (m_focus_manager)
-                        {
-                            consumed = m_focus_manager->handle_key(ke);
-                        }
-                        if (!consumed && m_key_handler)
-                        {
-                            m_key_handler(ke);
-                        }
+            // Route directly to focused widget if it supports text insertion
+            if (m_focus_manager && m_focus_manager->handle_paste(paste->text))
+            {
+                m_needs_draw = true;
+                return;
+            }
+
+            // Fallback for character-by-character typing:
+            // Send printable characters & tabs; NEVER synthesize synthetic Key::Enter
+            std::string_view remaining = paste->text;
+            while (!remaining.empty())
+            {
+                char32_t cp = next_codepoint(remaining);
+                if (cp >= 32 || cp == '\t')
+                {
+                    KeyEvent ke{};
+                    if (cp == '\t')
+                    {
+                        ke.ch = static_cast<uint32_t>(Key::Tab);
+                    }
+                    else
+                    {
+                        ke.ch = static_cast<uint32_t>(cp);
+                        if (cp >= 'A' && cp <= 'Z') ke.shift = true;
+                    }
+
+                    bool consumed = false;
+                    if (m_focus_manager)
+                    {
+                        consumed = m_focus_manager->handle_key(ke);
+                    }
+                    if (!consumed && m_key_handler)
+                    {
+                        m_key_handler(ke);
                     }
                 }
-                m_needs_draw = true;
             }
+            m_needs_draw = true;
             return;
         }
 
@@ -159,12 +163,6 @@ namespace koto
 
         if (auto* key = ev.as_key())
         {
-            if (key->ctrl && (key->ch == 'Q' || key->ch == 'q'))
-            {
-                m_running = false;
-                return;
-            }
-
             bool consumed = false;
             if (m_focus_manager)
             {
@@ -237,21 +235,36 @@ namespace koto
             // - If an animation tick handler is active, wait for the remaining time in this 16ms frame (~60 FPS).
             // - If static (no animation tick handler), sleep in kernel poll indefinitely (-1ms) until input arrives.
             int32_t wait_ms = -1;
-            if (m_loop.has_pending() || m_needs_draw)
+            if (m_loop.has_pending_event() || m_needs_draw)
             {
                 wait_ms = 0;
             }
-            else if (m_tick_handler || m_tick_dt_handler)
+            else
             {
-                auto now = clock::now();
-                if (now < next_frame)
+                int32_t frame_wait = -1;
+                if (m_tick_handler || m_tick_dt_handler)
                 {
-                    auto rem = std::chrono::duration_cast<std::chrono::milliseconds>(next_frame - now).count();
-                    wait_ms = static_cast<int32_t>(std::clamp(rem, 0L, 16L));
+                    auto now = clock::now();
+                    if (now < next_frame)
+                    {
+                        auto rem = std::chrono::duration_cast<std::chrono::milliseconds>(next_frame - now).count();
+                        frame_wait = static_cast<int32_t>(std::clamp(rem, 0L, 16L));
+                    }
+                    else
+                    {
+                        frame_wait = 0;
+                    }
+                }
+
+                if (m_loop.has_pending())
+                {
+                    // Incomplete input sequence in progress: wait up to 35ms or until next animation frame
+                    int32_t esc_wait = 35;
+                    wait_ms = (frame_wait >= 0) ? std::min(esc_wait, frame_wait) : esc_wait;
                 }
                 else
                 {
-                    wait_ms = 0;
+                    wait_ms = frame_wait >= 0 ? frame_wait : -1;
                 }
             }
 
@@ -262,17 +275,18 @@ namespace koto
             }
 
             // 2. Event Draining / Batching:
-            // Consume ALL pending input events that accumulated in the user-space buffer
-            // BEFORE executing the tick and render passes. Because EventLoop already drained
-            // all available bytes from kernel stdin with ioctl(FIONREAD), m_pending_input holds
-            // the full burst. Draining via has_pending() runs in user-space memory with zero syscalls.
-            while (m_running && m_loop.has_pending())
+            // Consume ALL pending complete events that accumulated in the user-space buffer
+            // BEFORE executing the tick and render passes. Draining via has_pending_event()
+            // runs in user-space memory with zero syscalls and strictly terminates when no
+            // further dispatchable events are ready.
+            while (m_running && m_loop.has_pending_event())
             {
                 Event pending_ev = m_loop.poll(0);
-                if (!pending_ev.is_tick())
+                if (pending_ev.is_tick())
                 {
-                    this->dispatch_event(pending_ev);
+                    break;
                 }
+                this->dispatch_event(pending_ev);
             }
 
             if (!m_running) break;
@@ -297,6 +311,12 @@ namespace koto
             {
                 this->draw_frame();
             }
+        }
+
+        if (m_term.in_raw_mode())
+        {
+            m_term.show_cursor();
+            m_term.restore_terminal();
         }
 
         return {};

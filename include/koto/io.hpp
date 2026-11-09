@@ -16,9 +16,10 @@ namespace koto
         while (rem > 0)
         {
             ssize_t written = ::write(fd, ptr, rem);
-            if (written < 0)
+            if (written <= 0)
             {
-                if (errno == EINTR) continue;
+                if (written < 0 && errno == EINTR) continue;
+                if (written == 0) return std::unexpected<int>(EIO);
                 return std::unexpected<int>(errno);
             }
             ptr += written;

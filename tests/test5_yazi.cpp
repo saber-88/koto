@@ -205,8 +205,8 @@ int main()
             return;
         }
 
-        // 4. q: quit
-        if (key.ch == 'q')
+        // 4. q / Ctrl+Q / Ctrl+C / Esc: quit
+        if (key.ch == 'q' || key.ch == 'Q' || key.is(Key::Escape) || (key.ctrl && (key.ch == 'c' || key.ch == 'C' || key.ch == 'q' || key.ch == 'Q')))
         {
             app.quit();
             return;

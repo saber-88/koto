@@ -343,11 +343,12 @@ namespace koto
             std::string_view rem = text;
             while (!rem.empty() && cur_col < inner.right())
             {
-                char32_t cp = next_codepoint(rem);
-                int w = codepoint_width(cp);
+                Grapheme g = next_grapheme(rem);
+                if (g.empty()) break;
+                int w = g.width;
                 if (cur_col + w <= inner.right())
                 {
-                    frame.set_cell(row, cur_col, {cp, fg_col, bg_col});
+                    frame.set_cell(row, cur_col, Cell{g, fg_col, bg_col});
                 }
                 cur_col += w;
             }

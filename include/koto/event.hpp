@@ -1,6 +1,7 @@
 #pragma once
 
 #include "koto/id.hpp"
+#include <chrono>
 #include <csignal>
 #include <cstdint>
 #include <string>
@@ -161,6 +162,7 @@ namespace koto
 
             auto poll(std::int32_t ms = 16) -> Event;
             bool has_pending() const noexcept { return !m_pending_input.empty(); }
+            bool has_pending_event() const noexcept;
             bool is_eof() const noexcept { return m_eof; }
 
             // Direct buffer parser (useful for testing or feeding synthetic input streams)
@@ -168,7 +170,14 @@ namespace koto
             static auto on_sigwinch(int) -> void;
 
             // Feed raw bytes into pending input buffer (for streaming input / tests)
-            void feed(std::string_view bytes) { m_pending_input.append(bytes); }
+            void feed(std::string_view bytes)
+            {
+                m_pending_input.append(bytes);
+                if (m_escape_deadline != std::chrono::steady_clock::time_point{})
+                {
+                    m_escape_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(35);
+                }
+            }
 
             // Thread-safe async wakeup: unblocks poll() from any background worker thread
             void wakeup() noexcept;
@@ -180,9 +189,11 @@ namespace koto
             struct sigaction m_old_sa{};
             int m_pipe_fds[2] = {-1, -1};
             bool m_eof = false;
+            mutable std::chrono::steady_clock::time_point m_escape_deadline{};
 
             auto on_resize() -> Event;
             auto parse_stdin() -> Event;
+            auto flush_incomplete_escape() -> Event;
 
     };
 }

@@ -20,6 +20,11 @@ namespace koto
             Frame(int rows, int cols);
             ~Frame() = default;
 
+            Frame(const Frame&) = delete;
+            Frame& operator=(const Frame&) = delete;
+            Frame(Frame&&) noexcept = default;
+            Frame& operator=(Frame&&) noexcept = default;
+
             auto handle_resize(int rows, int cols) -> void;
             auto set_cell(int row, int col, Cell c, Id tag_id = Id::none()) -> void;
             auto get_cell(int row, int col) const -> Cell;

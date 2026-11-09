@@ -8,6 +8,13 @@ int main()
 {
     App app;
 
+    app.on_key([&](const KeyEvent& key) {
+        if (key.ch == 'q' || key.ch == 'Q' || key.is(Key::Escape) || (key.ctrl && (key.ch == 'c' || key.ch == 'C' || key.ch == 'q' || key.ch == 'Q')))
+        {
+            app.quit();
+        }
+    });
+
     app.on_render([&](Frame& frame) {
         Area area = frame.area();
         if (area.height < 5 || area.width < 10) return;

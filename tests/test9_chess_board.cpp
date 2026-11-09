@@ -68,7 +68,7 @@ int main()
     };
 
     app.on_key([&](const KeyEvent& key) {
-        if (key.ch == 'q' || key.ch == 'Q')
+        if (key.ch == 'q' || key.ch == 'Q' || key.is(Key::Escape) || (key.ctrl && (key.ch == 'q' || key.ch == 'Q' || key.ch == 'c' || key.ch == 'C')))
         {
             app.quit();
             return;

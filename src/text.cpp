@@ -109,22 +109,7 @@ namespace koto
             int start_col = area.col;
             if (m_align != TextAlign::Left)
             {
-                int line_w = 0;
-                std::string_view scan = line;
-                while (!scan.empty())
-                {
-                    char32_t cp = next_codepoint(scan);
-                    if (cp == U'\r') continue;
-                    if (cp == U'\t')
-                    {
-                        int tab_size = 4;
-                        line_w = ((line_w / tab_size) + 1) * tab_size;
-                    }
-                    else
-                    {
-                        line_w += codepoint_width(cp);
-                    }
-                }
+                int line_w = text_width(line);
 
                 if (line_w < area.width)
                 {
@@ -167,15 +152,16 @@ namespace koto
                         if (cp_is_space != is_space) break;
 
                         std::string_view prev_scan = scan;
-                        char32_t full_cp = next_codepoint(scan);
+                        Grapheme g = next_grapheme(scan);
+                        if (g.empty()) break;
                         token_len += (prev_scan.size() - scan.size());
-                        if (full_cp == '\t')
+                        if (g.base_cp == '\t')
                         {
                             token_width += 4;
                         }
                         else
                         {
-                            token_width += codepoint_width(full_cp);
+                            token_width += g.width;
                         }
                     }
 
@@ -200,9 +186,12 @@ namespace koto
                     std::string_view token_rem = token;
                     while (!token_rem.empty())
                     {
-                        char32_t cp = next_codepoint(token_rem);
-                        if (cp == U'\r') continue;
-                        int w = (cp == U'\t') ? 4 : codepoint_width(cp);
+                        Grapheme g = next_grapheme(token_rem);
+                        if (g.empty()) break;
+                        if (g.base_cp == U'\r') continue;
+
+                        int w = (g.base_cp == U'\t') ? 4 : g.width;
+                        if (w == 0) continue;
 
                         if (col + w > area.right())
                         {
@@ -216,10 +205,10 @@ namespace koto
                                 }
                                 return;
                             }
-                            if (cp == U' ' || cp == U'\t') continue;
+                            if (g.base_cp == U' ' || g.base_cp == U'\t') continue;
                         }
 
-                        if (cp == U'\t')
+                        if (g.base_cp == U'\t')
                         {
                             for (int i = 0; i < 4 && col < area.right(); ++i)
                             {
@@ -228,7 +217,7 @@ namespace koto
                         }
                         else
                         {
-                            frame.set_cell(row, col, Cell{cp, m_fg, m_bg, w, false, m_attrs});
+                            frame.set_cell(row, col, Cell{g, m_fg, m_bg, w, false, m_attrs});
                             col += w;
                         }
                     }
@@ -244,13 +233,14 @@ namespace koto
 
                 while (!line_rem.empty())
                 {
-                    char32_t cp = next_codepoint(line_rem);
-                    if (cp == U'\r') continue;
+                    Grapheme g = next_grapheme(line_rem);
+                    if (g.empty()) break;
+                    if (g.base_cp == U'\r') continue;
 
                     if (skipping) continue;
 
                     // Tab stop alignment (4 spaces)
-                    if (cp == U'\t')
+                    if (g.base_cp == U'\t')
                     {
                         int tab_size = 4;
                         int rel = col - area.col;
@@ -264,7 +254,8 @@ namespace koto
                         continue;
                     }
 
-                    int w = codepoint_width(cp);
+                    int w = g.width;
+                    if (w == 0) continue;
                     
                     if (col + w > area.right())
                     {
@@ -276,7 +267,7 @@ namespace koto
                         continue;
                     }
 
-                    frame.set_cell(row, col, Cell{cp, m_fg, m_bg, w, false, m_attrs});
+                    frame.set_cell(row, col, Cell{g, m_fg, m_bg, w, false, m_attrs});
                     col += w;
                 }
             }

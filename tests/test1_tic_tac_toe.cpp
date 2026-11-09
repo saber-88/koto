@@ -77,8 +77,13 @@ int main()
         }
     };
 
-    // Hotkey: 'R' to restart
+    // Hotkey: 'R' to restart, 'Ctrl+Q' or 'Q' to quit
     app.on_key([&](const KeyEvent& key) {
+        if ((key.ctrl && (key.ch == 'q' || key.ch == 'Q')) || key.ch == 'q' || key.ch == 'Q')
+        {
+            app.quit();
+            return;
+        }
         if (key.ch == 'r' || key.ch == 'R')
         {
             board = {};

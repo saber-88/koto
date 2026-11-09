@@ -139,12 +139,13 @@ namespace koto
                 int c = label_start_col;
                 while (!remaining.empty() && c < area.right())
                 {
-                    char32_t cp = next_codepoint(remaining);
-                    int w = codepoint_width(cp);
+                    Grapheme g = next_grapheme(remaining);
+                    if (g.empty()) break;
+                    int w = g.width;
 
                     // Preserve existing background cell color under the label
                     Cell existing = frame.get_cell(label_row, c);
-                    frame.set_cell(label_row, c, {cp, m_label_fg, existing.bg});
+                    frame.set_cell(label_row, c, Cell{g, m_label_fg, existing.bg});
                     c += w;
                 }
             }

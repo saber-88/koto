@@ -1,5 +1,8 @@
-#include <koto/koto.hpp>
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
+#include <koto/koto.hpp>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -112,6 +115,33 @@ void test_codepoint_widths()
     assert(text_width("👨‍👩‍👧‍👦") == 2);
     assert(text_width("👩‍💻") == 2);
     assert(text_width("🏳️‍🌈") == 2);
+
+    // Standard text symbols in Dingbats and Misc Symbols default to width 1 (NOT wide emojis)
+    assert(codepoint_width(U'★') == 1);
+    assert(codepoint_width(U'☆') == 1);
+    assert(codepoint_width(U'✓') == 1);
+    assert(codepoint_width(U'✔') == 1);
+    assert(codepoint_width(U'✕') == 1);
+    assert(codepoint_width(U'✖') == 1);
+    assert(codepoint_width(U'➔') == 1);
+
+    // Standard TR51 BMP emojis default to width 2
+    assert(codepoint_width(0x2B50) == 2); // ⭐
+    assert(codepoint_width(0x26A1) == 2); // ⚡
+    assert(codepoint_width(0x2728) == 2); // ✨
+
+    // Text-presentation symbols vs emoji-presentation (with VS16)
+    assert(text_width("🗑") == 1);
+    assert(text_width("🗑️") == 2);
+    assert(text_width("ℹ") == 1);
+    assert(text_width("ℹ️") == 2);
+    assert(text_width("⚠️") == 2);
+    assert(text_width("⚙️") == 2);
+
+    // Advanced Emoji Grapheme Clusters
+    assert(text_width("1️⃣") == 2); // Keycap sequence
+    assert(text_width("🇺🇸") == 2); // Regional indicator flag pair
+    assert(text_width("👍🏽") == 2); // Skin tone modifier
 
     std::cout << "PASSED\n";
 }
@@ -280,6 +310,135 @@ void test_box_and_list_with_cjk_and_emojis()
     std::cout << "PASSED\n";
 }
 
+void test_cell_grapheme_clusters()
+{
+    std::cout << "[Test 8] Cell owning multi-codepoint grapheme clusters... ";
+    Frame frame(2, 20);
+
+    // 1. Emoji with Variation Selector: ❤️ (U+2764, U+FE0F - 2 codepoints, 6 bytes, width 2)
+    Text("❤️ Heart").draw(frame, frame.area());
+    Cell c_heart = frame.get_cell(0, 0);
+    assert(c_heart.view() == "❤️");
+    assert(c_heart.width == 2);
+    assert(frame.get_cell(0, 1).continuation);
+    assert(frame.to_plain_text_row(0) == "❤️ Heart");
+
+    // 2. Flag Sequence: 🇺🇸 (U+1F1FA, U+1F1F8 - 2 codepoints, 8 bytes, width 2)
+    frame.clear_back_buffer();
+    Text("🇺🇸 USA").draw(frame, frame.area());
+    Cell c_flag = frame.get_cell(0, 0);
+    assert(c_flag.view() == "🇺🇸");
+    assert(c_flag.width == 2);
+    assert(frame.get_cell(0, 1).continuation);
+    assert(frame.to_plain_text_row(0) == "🇺🇸 USA");
+
+    // 3. Skin-tone Modifier: 👍🏽 (U+1F44D, U+1F3FD - 2 codepoints, 8 bytes, width 2)
+    frame.clear_back_buffer();
+    Text("👍🏽 Good").draw(frame, frame.area());
+    Cell c_skin = frame.get_cell(0, 0);
+    assert(c_skin.view() == "👍🏽");
+    assert(c_skin.width == 2);
+    assert(frame.get_cell(0, 1).continuation);
+    assert(frame.to_plain_text_row(0) == "👍🏽 Good");
+
+    // 4. Keycap Sequence: 1️⃣ ('1', U+FE0F, U+20E3 - 3 codepoints, 7 bytes, width 2)
+    frame.clear_back_buffer();
+    Text("1️⃣ One").draw(frame, frame.area());
+    Cell c_keycap = frame.get_cell(0, 0);
+    assert(c_keycap.view() == "1️⃣");
+    assert(c_keycap.width == 2);
+    assert(frame.get_cell(0, 1).continuation);
+    assert(frame.to_plain_text_row(0) == "1️⃣ One");
+
+    // 5. ZWJ Sequence: 👩‍💻 (U+1F469, U+200D, U+1F4BB - 3 codepoints, 11 bytes, width 2)
+    frame.clear_back_buffer();
+    Text("👩‍💻 Dev").draw(frame, frame.area());
+    Cell c_zwj = frame.get_cell(0, 0);
+    assert(c_zwj.view() == "👩‍💻");
+    assert(c_zwj.width == 2);
+    assert(frame.get_cell(0, 1).continuation);
+    assert(frame.to_plain_text_row(0) == "👩‍💻 Dev");
+
+    // 6. Complex 25-byte ZWJ Family Emoji: 👨‍👩‍👧‍👦 (4 personas + 3 ZWJs = 25 bytes, width 2)
+    frame.clear_back_buffer();
+    Text("👨‍👩‍👧‍👦 Family").draw(frame, frame.area());
+    Cell c_family = frame.get_cell(0, 0);
+    assert(c_family.view() == "👨‍👩‍👧‍👦");
+    assert(c_family.grapheme.size == 25);
+    assert(c_family.width == 2);
+    assert(frame.get_cell(0, 1).continuation);
+    assert(frame.to_plain_text_row(0) == "👨‍👩‍👧‍👦 Family");
+
+    // Static assertion verifying Cell cache-line alignment
+    static_assert(sizeof(Cell) == 64, "Cell must be exactly 64 bytes (1 cache line)");
+
+    std::cout << "PASSED\n";
+}
+
+void test_grapheme_editing_and_sticky_cursor()
+{
+    std::cout << "[Test 9] Grapheme-atomic backspace, delete, and sticky cursor... ";
+
+    // 1. TextInputState atomic backspace & delete
+    TextInputState input;
+    input.insert("❤️");
+    assert(input.value == "❤️");
+    assert(input.cursor == 6); // 6 bytes: \xE2\x9D\xA4\xEF\xB8\x8F
+
+    // Move left should skip the whole grapheme in one step
+    input.move_left();
+    assert(input.cursor == 0);
+    input.move_right();
+    assert(input.cursor == 6);
+
+    // Backspace should erase the whole ❤️ (not leaving orphan \xE2\x9D\xA4)
+    input.backspace();
+    assert(input.value.empty());
+    assert(input.cursor == 0);
+
+    // Atomic flag deletion
+    input.insert("🇺🇸");
+    assert(input.value == "🇺🇸");
+    assert(input.cursor == 8);
+    input.backspace();
+    assert(input.value.empty());
+
+    // 2. TextAreaState sticky cursor across CJK and ASCII lines
+    TextAreaState editor;
+    editor.text = {"こんにちは", "0123456789"};
+    // Line 0 has 5 CJK characters = 10 visual columns (15 bytes)
+    // Line 1 has 10 ASCII characters = 10 visual columns (10 bytes)
+
+    editor.cursor_row = 0;
+    editor.move_end();
+    assert(editor.cursor_row == 0);
+    assert(editor.cursor_col == 15);
+    assert(editor.preferred_col == 10); // Visual column 10!
+
+    // Move down to Line 1: should land at visual column 10 (byte 10)
+    editor.move_down();
+    assert(editor.cursor_row == 1);
+    assert(editor.cursor_col == 10);
+    assert(editor.preferred_col == 10);
+
+    // Move up to Line 0: should land back at visual column 10 (byte 15) with ZERO drift!
+    editor.move_up();
+    assert(editor.cursor_row == 0);
+    assert(editor.cursor_col == 15);
+    assert(editor.preferred_col == 10);
+
+    // 3. TextAreaState atomic grapheme deletion
+    editor.clear();
+    editor.insert("👩‍💻");
+    assert(editor.text[0] == "👩‍💻");
+    assert(editor.cursor_col == 11);
+    editor.backspace();
+    assert(editor.text[0].empty());
+    assert(editor.cursor_col == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -293,9 +452,11 @@ int main()
     test_text_alignment_with_wide_characters();
     test_text_overflow_with_cjk();
     test_box_and_list_with_cjk_and_emojis();
+    test_cell_grapheme_clusters();
+    test_grapheme_editing_and_sticky_cursor();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 7 CJK & EMOJI TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 9 CJK & EMOJI TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

@@ -3,8 +3,8 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg?style=flat&logo=c%2B%2B)](https://en.cppreference.com/w/cpp/23)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Linux-orange.svg?logo=linux)](https://kernel.org)
-[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-32%20Passing-brightgreen.svg)]()
-[![CJK & Unicode](https://img.shields.io/badge/Unicode-7%20Passing-brightgreen.svg)]()
+[![Headless Tests](https://img.shields.io/badge/Headless%20Tests-37%20Passing-brightgreen.svg)]()
+[![CJK & Unicode](https://img.shields.io/badge/Unicode-9%20Passing-brightgreen.svg)]()
 [![Zero Warnings](https://img.shields.io/badge/Compiler%20Warnings-Zero-brightgreen.svg)]()
 
 > **koto** (琴) is a modern, dependency-free, high-performance C++23 Terminal User Interface (TUI) engine engineered for deterministic state management (`UI = f(state)`), differential double-buffered rendering, tear-free atomic GPU frame presentation, universal keyboard escape decoding, hardware-like $O(1)$ hit-buffer spatial mouse interaction, and CI/CD automated headless snapshot testing.
@@ -20,16 +20,16 @@ Traditional terminal UI development in C and C++ has long been burdened by low-l
 - **Zero External Dependencies**: Pure standard C++23 library and direct POSIX system calls. No `ncurses`, no `terminfo`, no dynamic link requirements.
 - **DEC Mode 2026 Synchronized Updates**: Emits private CSI sequences (`\033[?2026h` / `\033[?2026l`) to halt terminal rasterization during buffer writes, enabling atomic, tear-free, flicker-free single-flip frame presentation in GPU-accelerated terminals.
 - **Differential Double-Buffered Renderer**: Compares front and back cell buffers per frame. Only modified cells emit ANSI SGR sequences, batched into a single formatted `write()` syscall with SGR color state compression.
-- **Zero-Latency Event Loop & Burst Draining**: Drains pending input bursts with `ioctl(FIONREAD)` to completely eliminate escape sequence splitting, mouse/key inversions, and keyboard lag.
-- **First-Class Focus Engine (`FocusManager`)**: Combines 1D tab rings (`Tab` / `Shift+Tab`) and auto-harvested 2D spatial navigation (`Arrow` keys) across screen geometry with C++20 concept constraints (`FocusableState`).
+- **Zero-Latency Event Loop & Burst Draining**: Drains pending input bursts with `ioctl(FIONREAD)` and a monotonic escape disambiguation deadline timer to completely eliminate escape sequence splitting, mouse/key inversions, and keyboard lag.
+- **First-Class Focus Engine (`FocusManager`)**: Combines 1D tab rings (`Tab` / `Shift+Tab`) and auto-harvested 2D spatial navigation across screen geometry with C++20 concept constraints (`FocusableState`). Configurable navigation policies (`FocusNavPolicy::TabOnly` default, `FocusNavPolicy::SpatialArrows`) protect text/list arrow navigation from accidental escapes while supporting multi-column layouts.
 - **Hardware-like Frame Hit-Buffer**: Tags back-buffer cells with 32-bit universal compile-time `Id` tokens for $O(1)$ spatial mouse hit-testing, direct row/tab clicking, and mouse wheel scrolling.
 - **Modal Scoping & Focus Trapping (`IdScope`)**: RAII-guarded modal scopes that automatically shield background clicks, trap keyboard navigation within active dialogs, and restore previous focus on dismissal.
-- **Universal Keyboard Engine & Kitty Protocol (`CSI u`)**: Automatically negotiates Kitty keyboard enhancement flag 1 (`\033[>1u` / `\033[<u`) to disambiguate `Tab` vs `Ctrl+I`, `Enter` vs `Ctrl+M`, `Escape`, modifier bitmasks (formula: `M = 1 + flags`, including Meta / Super / Windows keys), and functional keycodes across Kitty, Ghostty, Alacritty, WezTerm, Foot, GNOME Terminal, Konsole, xterm, tmux, and SSH.
+- **Universal Keyboard Engine & Kitty Protocol (`CSI u`)**: Emits Kitty keyboard progressive enhancement flag 1 (`\033[>1u` / `\033[<u`) to disambiguate `Tab` vs `Ctrl+I`, `Enter` vs `Ctrl+M`, `Escape`, modifier bitmasks (formula: `M = 1 + flags`, including Meta / Super / Windows keys), and functional keycodes on supporting emulators (Kitty, Ghostty, WezTerm, Foot), while maintaining full fallback compatibility with standard ANSI/CSI/SS3 sequences on terminals without CSI-u support (GNOME Terminal, Konsole, xterm, tmux, and SSH).
 - **Bracketed Paste Mode (`\033[?2004h`)**: Captures clipboard streams inside dedicated `PasteEvent`s, protecting against runaway auto-indentation ("staircase effect"), frame render storms, and malicious terminal command injection.
 - **Deterministic State Architecture (`UI = f(state)`)**: Decouples business logic and navigation (`TextAreaState`, `ListState`, `TextInputState`, `TabsState`) from pure, immutable views (`TextArea`, `List`, `TextInput`, `Tabs`).
 - **Native C++23 Language Features**: Multidimensional 2D subscripting (`frame[r, c]`, `grid[r, c]`), exception-free `std::expected` error handling (`try_parse_color`), `std::views::enumerate` range pipelines, and defaulted comparison operators (`Area`, `Id`).
 - **Headless Snapshot Testing by Default**: Create an in-memory `Frame(rows, cols)` without a live TTY or virtual framebuffer, draw any widget, and assert on exact row text with `frame.to_plain_text_row(r)`.
-- **Wide Unicode, CJK & Emoji Engine**: Full UAX-11 East Asian Width calculation, 2-column continuation cells, emoji rendering, and safe overwrite clipping.
+- **Wide Unicode, CJK & Emoji Engine**: Full UAX-11 East Asian Width calculation, 2-column continuation cells, 36-byte grapheme storage for complex multi-codepoint ZWJ emojis, and safe overwrite clipping.
 - **Zero Warnings**: Compiles cleanly under strict compiler flags: `-Wall -Werror -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast`.
 
 ---
@@ -39,7 +39,7 @@ Traditional terminal UI development in C and C++ has long been burdened by low-l
 ```
 +---------------------------------------------------------------------------------+
 | Layer 3: Declarative Application Runtime & Focus Engine (koto::App, FocusManager) |
-| - RAII terminal lifecycle, 60 FPS tick, signalfd SIGWINCH resize handling       |
+| - RAII terminal lifecycle, 60 FPS tick, POSIX self-pipe SIGWINCH resize handling|
 | - FocusManager: 1D Tab Ring, 2D Spatial Arrow Jumps, Pre-dispatch Interceptors  |
 | - IdScope: RAII Modal Scoping, Focus Trapping & Background Shielding            |
 | - Event dispatch: on_key, on_mouse, on_paste, on_tick, on_render                |
@@ -59,13 +59,13 @@ Traditional terminal UI development in C and C++ has long been burdened by low-l
 | - Grid: 2D coordinate matrix generator for dashboards & board games             |
 +---------------------------------------------------------------------------------+
 | Layer 1: The Metal Core                                                         |
-| - Terminal: RAII raw mode, alternate screen buffer, bracketed paste negotiation |
+| - Terminal: RAII raw mode, alternate screen buffer, bracketed paste activation  |
 | - Frame: Double-buffered cell grid, DEC Mode 2026 atomic synchronized updates   |
 | - Hit-Buffer: 32-bit spatial ID raster map for O(1) mouse hit-testing           |
-| - EventLoop: POSIX signalfd SIGWINCH, ioctl FIONREAD burst draining, SGR 1006   |
+| - EventLoop: POSIX self-pipe SIGWINCH, ioctl FIONREAD burst draining, SGR 1006  |
 | - Cell & Color: 24-bit TrueColor RGB, 256-color palette, linear lerp gradients |
 | - UTF-8: Codepoint widths, multi-byte decoding, wide CJK & 2-column emojis      |
-| - Robust I/O: EINTR-immune write_all(), SIGTERM & SIGHUP emergency recovery     |
+| - Robust I/O: EINTR-immune write_all(), SIGTERM, SIGHUP, crash signal recovery  |
 +---------------------------------------------------------------------------------+
 ```
 
@@ -395,13 +395,14 @@ board.for_each([&](size_t row, size_t col, const Area& square) {
 ---
 
 ### 11. `FocusManager` & `IdScope` (Spatial Navigation, Mouse Hit-Testing & Modal Trapping)
-The `FocusManager` orchestrates bi-directional keyboard navigation and mouse hit-testing across arbitrary widgets with zero heap allocations in the hot draw path:
+The `FocusManager` orchestrates bi-directional keyboard navigation and mouse hit-testing across arbitrary widgets with pre-allocated cell and hit-buffers and minimal allocation overhead:
 
-* **1D Tab Ring**: Cycles forward with `Tab` and backward with `Shift+Tab`.
-* **2D Spatial Arrow Navigation**: Computes Euclidean distance and directional angle cones between bounding box centroids, enabling natural `Up`, `Down`, `Left`, and `Right` arrow navigation across multi-column grids or disjoint cards.
-* **C++20 Concept Constraint (`FocusableState`)**: Automatically accepts any widget state object exposing `handle_key(const KeyEvent&) -> bool` (`TextInputState`, `TextAreaState`, `ListState`, `TabsState`).
-* **Pre-Dispatch Interceptor Hook**: `fm.interceptor([](const KeyEvent& k, FocusTarget* active) -> bool)` allows application developers to intercept keys (e.g. global shortcuts, modal escape, Vim modes) before focus routing.
+* **1D Tab Ring**: Cycles forward with `Tab` and backward with `Shift+Tab`. Automatically skips hidden, zero-sized, or disabled widgets.
+* **2D Spatial Arrow Navigation**: Computes Manhattan rectilinear projection ($\text{score} = \text{primary} + 2 \times \text{secondary}$) between bounding box edges and centroids, enabling natural `Up`, `Down`, `Left`, and `Right` arrow navigation across multi-column grids or disjoint cards. (Opt-in via `fm.nav_policy = FocusNavPolicy::SpatialArrows;` or `TabAndSpatialArrows`; default `TabOnly` preserves arrow keys for internal text/list scrolling).
+* **C++20 Concept Constraint (`FocusableState`)**: Constrained via `requires(T a, const KeyEvent& k) { { a.focused } -> std::convertible_to<bool>; { a.handle_event(k) } -> std::convertible_to<bool>; }`, automatically accepting `TextInputState`, `TextAreaState`, `ListState`, `TabsState`, or custom widget states.
+* **Pre-Dispatch Interceptor Hook**: `fm.interceptor([](FocusManager& fm, const KeyEvent& k) -> bool)` allows application developers to intercept keys (e.g. global shortcuts, modal escape, Vim modes) before focus routing.
 * **Modal Focus Trapping & Background Shielding (`IdScope`)**: RAII modal scopes (`push_scope(id, ScopeMode::Modal)`) automatically trap keyboard focus within the dialog, shield background elements from accidental mouse clicks, and restore focus to the opening widget on dismissal.
+* **Lifecycle Management**: Explicit `fm.remove(Id)` and `fm.remove(state)` APIs prevent dangling references when widgets or dialogs are destroyed dynamically.
 * **$O(1)$ SGR Mouse Hit-Testing & Sub-Item Interaction**: Left-clicking any widget instantly focuses it. For complex widgets, mouse coordinates are resolved to sub-items:
   * **`Tabs`**: Direct left-click selects tab headers; mouse wheel scrolls and cycles active tabs.
   * **`List`**: Direct left-click activates rows; mouse wheel scrolls through items.
@@ -415,9 +416,9 @@ TextInputState password;
 bool submit_clicked = false;
 
 // 1. Declaratively register interactive targets
-fm.register_target(ID("user"), username, user_area);
-fm.register_target(ID("pass"), password, pass_area);
-fm.register_target(ID("submit"), submit_area, [&](const KeyEvent& k) {
+fm.add(username, Id("user"));
+fm.add(password, Id("pass"));
+fm.add(Id("submit"), [&](const KeyEvent& k) {
     if (k.is(Key::Enter)) {
         submit_clicked = true;
         return true;
@@ -430,7 +431,7 @@ app.use_focus(fm);
 
 // 3. Render widgets with automatic visual focus feedback
 Box().title(" Username ")
-     .focused(fm.is_focused(ID("user")))
+     .focused(fm.is_focused(Id("user")))
      .draw(frame, user_area);
 TextInput(username).draw(frame, user_area);
 ```
@@ -446,7 +447,7 @@ Declarative button component with automatic `FocusManager` integration, focus hi
 
 ```cpp
 Button("✔ Save Profile")
-    .id(ID("save_btn"))
+    .id(Id("save_btn"))
     .focus(fm)
     .focused_border_fg(Color::Emerald)
     .on_click([&] {
@@ -487,7 +488,7 @@ Supporting emulators (Ghostty, Kitty, WezTerm, Alacritty, iTerm2, modern Windows
 ### Kitty Keyboard Protocol (`CSI u`) & Disambiguation
 In legacy terminals, `Ctrl+I` is byte-for-byte identical to `Tab` (`0x09`), `Ctrl+M` is identical to `Enter` (`0x0D`), and `Escape` (`0x1B`) is ambiguous with the start of an escape sequence.
 
-On startup, `koto` automatically negotiates **Kitty progressive enhancement flag 1** (`\033[>1u`) and pops it on exit (`\033[<u`):
+On startup, `koto` emits **Kitty progressive enhancement flag 1** (`\033[>1u`) and pops it on exit (`\033[<u`):
 - `Shift + Enter` → `\033[13;2u`
 - `Ctrl + Enter` → `\033[13;5u`
 - `Ctrl + Tab` → `\033[9;5u` (distinct from `Ctrl+I`!)
@@ -504,9 +505,9 @@ When a user pastes text, the terminal emulator wraps the payload in `\033[200~` 
 
 `koto` parses this into an atomic `PasteEvent`:
 1. **Prevents Runaway Auto-Indentation ("Staircase Effect")**: Text editors know the text is pasted, temporarily disabling auto-indent.
-2. **Atomic Single-Step Undo**: Pasting 500 characters creates 1 history entry, undone with a single `Ctrl+Z`.
+2. **Atomic Stream Ingestion**: Pasting 500 characters delivers the entire clipboard payload in a single atomic string rather than dispatching 500 individual character events, preserving newline structure without triggering synthetic form submits.
 3. **No 60 FPS Render Storms**: 1 paste operation triggers 1 layout and 1 render pass, rather than 500 separate redraw cycles.
-4. **Security**: Pasted newlines are treated as literal text, never accidentally executing shell commands.
+4. **Security**: Pasted newlines are treated as literal text, never accidentally executing shell commands or button actions.
 
 ```cpp
 app.on_paste([&](const std::string& text) {
@@ -561,8 +562,8 @@ Naive TUI libraries that call `::write()` with fixed size assumptions silently d
 
 ---
 
-### Emergency Crash & Signal Recovery (`SIGTERM` & `SIGHUP` Teardown)
-When a terminal application terminates normally, C++ destructors (`Terminal::~Terminal()`) restore the terminal to canonical cooked mode. However, if an application is killed abruptly—such as via `kill <pid>` (`SIGTERM`), or when the terminal tab/window is closed or an SSH connection drops (`SIGHUP`)—the Linux kernel aborts the process immediately.
+### Emergency Crash & Signal Recovery (`SIGTERM`, `SIGHUP`, Crash Signals & C++ Terminate)
+When a terminal application terminates normally, C++ destructors (`Terminal::~Terminal()`) restore the terminal to canonical cooked mode. However, if an application is killed abruptly—such as via `kill <pid>` (`SIGTERM`), or when the terminal tab/window is closed or an SSH connection drops (`SIGHUP`), or if a memory fault occurs (`SIGSEGV`, `SIGABRT`)—the Linux kernel aborts the process immediately.
 
 Without dedicated signal handlers, C++ stack unwinding is bypassed, leaving the user's host shell in a severely broken state:
 * **Raw Mode Trapped**: Terminal echo is disabled (`-ECHO`), line buffering is disabled (`-ICANON`), and `Ctrl+C` (`-ISIG`) no longer works. Keystrokes are invisible and Enter prints newlines without carriage returns.
@@ -571,7 +572,7 @@ Without dedicated signal handlers, C++ stack unwinding is bypassed, leaving the 
 * **SGR Mouse Mode Leaking**: The terminal emulator continues reporting mouse clicks as raw escape sequences (`\033[<0;15;7M`) spamming the command line prompt.
 * **Kitty Keyboard & Bracketed Paste Stuck**: Modified keys emit raw escape codes rather than standard characters.
 
-`koto` installs dedicated emergency signal handlers for `SIGTERM` and `SIGHUP` via `sigaction()` with `SA_RESETHAND`:
+`koto` installs comprehensive, robust emergency handlers:
 
 1. **Async-Signal-Safe Restoration (`restore_minimal() noexcept`)**: Emits a single, compact composite escape sequence to turn off mouse reporting, pop Kitty keyboard flags, disable bracketed paste, restore cursor visibility, and exit the alternate screen:
    ```cpp
@@ -581,10 +582,13 @@ Without dedicated signal handlers, C++ stack unwinding is bypassed, leaving the 
                           "\033[?25h"                            // show cursor
                           "\033[?1049l";                         // leave alt screen
    ```
-2. **`errno` Preservation**: Captures and restores `errno` within the signal handler so interrupted system calls in the caller context are not clobbered.
-3. **Canonical Mode Restoration**: Re-applies the saved `termios` attributes via `tcsetattr(STDIN_FILENO, TCSANOW, &g_saved)`.
-4. **Signal Re-Raising (`raise(sig)`)**: Re-raises the fatal signal so parent shells, Docker, systemd, or process supervisors correctly detect process termination by signal with standard exit codes (e.g. `128 + 15` for SIGTERM).
-5. **Clean Uninstallation**: When `Terminal::restore_terminal()` executes during normal RAII destruction, signal handlers are cleanly restored to their original dispositions.
+2. **`nohup` Signal Preservation**: Checks existing signal disposition before registering `SIGHUP`; if `sa_handler == SIG_IGN`, `koto` leaves `SIGHUP` ignored so background processes launched with `nohup` continue running uninterrupted.
+3. **Dedicated Crash Signal Stack (`sigaltstack`)**: Allocates a 64 KB dedicated signal stack and installs handlers for fatal signals (`SIGSEGV`, `SIGABRT`, `SIGBUS`, `SIGFPE`, `SIGILL`) with `SA_ONSTACK | SA_RESETHAND`. Even under stack overflow or memory corruption, the crash handler reliably restores terminal canonical mode before re-raising the signal for core dumping.
+4. **Unhandled C++ Exception Protection**: Installs a `std::set_terminate` handler (`on_terminate`) that restores the terminal before process abortion.
+5. **`errno` Preservation**: Captures and restores `errno` within signal handlers so interrupted system calls in the caller context are not clobbered.
+6. **Canonical Mode Restoration**: Re-applies the saved `termios` attributes via `tcsetattr(STDIN_FILENO, TCSANOW, &g_saved)`.
+7. **Signal Re-Raising (`raise(sig)`)**: Re-raises fatal signals with default disposition so parent shells, Docker, systemd, or process supervisors correctly detect process termination by signal with standard exit codes (e.g. `128 + 15` for SIGTERM).
+8. **Clean Uninstallation**: When `Terminal::restore_terminal()` executes during normal RAII destruction, signal handlers are cleanly restored to their original dispositions.
 
 ---
 
@@ -623,37 +627,48 @@ void test_box_and_list()
 
 Run the built-in test suites:
 ```bash
-# 25 comprehensive snapshot tests (Box, List, Layout, Gauge, Sparkline, Grid, TextArea, Tabs, Kitty CSI u, Paste, C++23 native features, Hit-Buffer, FocusManager, Spatial 2D, Modal Scoping, Sub-item clicks, Fill, Button)
-./build/test6_headless_test
+# Run all automated test suites via CTest:
+ctest --test-dir build --output-on-failure
 
-# 7 UTF-8 / CJK / Emoji width & continuation cell tests
-./build/test8_text_cjk_emoji
+# Or run individual modular test suites directly:
+./build/test_headless_widgets         # 11 UI widget tests (Box, Text, List, Rule, Gauge, Sparkline, TextArea, Tabs, Button)
+./build/test_headless_layout          # 5 layout & core tests (Clamping, Grids, 16-capacity Result, C++23 native features)
+./build/test_headless_focus_events    # 8 focus & event tests (Kitty CSI u, Hit-buffer, FocusManager, Spatial 2D, Mouse routing, H2/M5 tab skipping & unregistration)
+./build/test_headless_render_terminal # 6 render & terminal tests (Quantization, Color type, Fill/Clear, Self-pipe, TTY errors)
+./build/test_headless_regressions     # 7 regression & audit tests (RFC 3629 UTF-8, Hover, Move-only Frame, Button borders, C1 partial escapes, H3/M2 SIGHUP & EOF, R1 slow paste, R5 truncated input)
+./build/test8_text_cjk_emoji          # 9 UTF-8 / CJK / Emoji width, continuation cell & grapheme cluster tests
+
+# Or run the isolated process multi-test runner:
+./build/test6_headless_test
 ```
 
 ---
 
 ## 📂 Included Showcase Applications
 
-The repository includes **15 standalone showcase programs** demonstrating every feature of the library:
+The repository includes **18 standalone showcase programs** demonstrating every feature of the library:
 
 | Executable | Description |
 |---|---|
 | **`kotoapp`** | Primary application showcase featuring interactive layout splitting, List, TextArea, and Gauge. |
-| **`test1_tic_tac_toe`** | Fully playable 2-player game with Vim/Arrow navigation and automatic win detection. |
+| **`test1_tic_tac_toe`** | Fully playable 2-player game with Vim/Arrow navigation, mouse clicks, and automatic win detection. |
 | **`test2_key_visualizer`** | Live keystroke inspector reporting exact modifier flags (Ctrl, Alt, Shift, Meta), Kitty CSI u codes, and raw hex codepoints. |
 | **`test3_vbox`** | Declarative flex and percentage layout composition (`VBox` / `HBox`). |
 | **`test4_text_input`** | 3-layer input customization: Pre-hook interceptors, validation filters, and modal Vim editing with `Tab` / `Shift+Tab` focus cycling. |
 | **`test5_yazi`** | A 3-column Miller column file explorer inspired by Yazi with live file previews via `TextArea`. |
-| **`test6_headless_test`** | Automated headless snapshot test suite with 25 tests and zero terminal dependencies. |
+| **`test6_headless_test`** | Automated headless snapshot test suite with 37 tests across 5 modular process-isolated suites. |
 | **`test7_dashboard`** | Real-time 60 FPS system telemetry monitor demonstrating Gauge with fractional sub-blocks, rolling Sparklines, titled Rules, and Color lerping. |
-| **`test8_text_cjk_emoji`** | Comprehensive UTF-8 test suite asserting CJK ideographs, 2-column emojis, continuation cells, overwrite protection, and wide text alignment. |
+| **`test8_text_cjk_emoji`** | Comprehensive UTF-8 test suite asserting CJK ideographs, 2-column emojis, continuation cells, multi-codepoint grapheme clusters, and overwrite protection. |
 | **`test9_chess_board`** | Fully playable 8x8 interactive Chess board demonstrating `Layout::grid_uniform`, `Frame::fill`, alternating wood squares, and Unicode chess piece rendering. |
 | **`test10_cjk_terminal`** | Interactive live terminal inspector for Japanese (Kanji/Kana), Chinese, Korean (Hangul), 2-column Emojis, vertical alignment ruler, and live UTF-8 input with `Tabs`. |
 | **`test11_text_area`** | Multi-line code editor with line numbers gutter, Sticky/Clamp cursor navigation, Margin/Clamp viewport scrolling, and real-time status telemetry. |
 | **`test12_tabs`** | Multi-tab container orchestrating `TextArea`, `List`, `Gauge`, `Sparkline`, and `Grid` chess board with live tab style switching. |
 | **`test13_focus_form`** | Interactive multi-field user registration form with 1D Tab cycle, `TextInputState`, `ListState`, `TabsState`, button activation, and dynamic visual focus states. |
-| **`test14_spatial_2d_nav`** | 2D spatial navigation demo with 3x3 disconnected card grid, Euclidean centroid jumps across Arrow keys (`Up`, `Down`, `Left`, `Right`), and direct mouse click selection. |
+| **`test14_spatial_2d_nav`** | 2D spatial navigation demo with 3x3 disconnected card grid, Manhattan rectilinear projection jumps across Arrow keys (`Up`, `Down`, `Left`, `Right`), and direct mouse click selection. |
 | **`test15_modal_focus_trap`** | Modal dialog workflow with confirmation popups, background mouse click shielding, automatic modal focus trapping, Escape dismiss, and focus restoration. |
+| **`test16_animation`** | 60 FPS real-time starry sky particle simulation demonstrating smooth animated rendering, interactive panning, zooming, and pause controls. |
+| **`test17_solar_system`** | Multi-body orbital mechanics simulation featuring Sun, 8 planets, major moons, orbital trails, and dynamic camera tracking. |
+| **`test18_3d_engine`** | Real-time 3D software rasterizer rendering wireframe & shaded geometries (Gargantua black hole, CyberGrid, Quantum Knot, and Hyperspace Warp). |
 
 Run any showcase directly from `./build/`:
 ```bash
@@ -663,7 +678,36 @@ Run any showcase directly from `./build/`:
 ./build/test13_focus_form
 ./build/test14_spatial_2d_nav
 ./build/test15_modal_focus_trap
+./build/test16_animation
+./build/test17_solar_system
+./build/test18_3d_engine
 ```
+
+---
+
+## 📋 Architectural Contracts & Design Constraints
+
+To provide production-grade predictability across diverse terminal emulators, architectures, and embedded environments, `koto` enforces the following explicit architectural contracts:
+
+### 1. Application Lifecycle & Explicit Quit Semantics
+* **No Hardcoded Global Interceptions**: `koto` does *not* consume or trap any global exit key (such as `Ctrl+Q` or `Esc`). Developers retain total control over keybindings, enabling text editors and terminal applications to bind `Ctrl+Q` or any other key without library interference.
+* **Terminal Raw Mode Scope**: Raw terminal mode, mouse reporting, and alternate screen buffer are initialized strictly when `app.run()` is invoked, and restored cleanly upon return. Calling `app.quit()` sets the running flag to false, gracefully unwinding the event loop and restoring original termios state.
+
+### 2. Input Stream & Bracketed Paste Preservation
+* **Atomic Bracketed Paste**: Multi-byte bracketed paste streams (`\033[200~` through `\033[201~`) are treated as atomic payloads. They are explicitly exempted from the 35ms short-escape disambiguation timer, guaranteeing that large pastes, SSH packet fragmentation, or terminal multiplexer delays (e.g., tmux) never fracture pastes into bare keystrokes.
+* **Non-ESC Stale Input Recovery**: Stale or truncated non-escape byte sequences (such as orphaned multi-byte UTF-8 lead bytes) are discarded after the 35ms monotonic timeout, preventing loop starvation and maintaining a solid 60 FPS animation tick rate.
+
+### 3. Signal Chaining & Host Crash Diagnostics
+* **Crash Handler Transparency**: When installing emergency signal handlers (`SIGSEGV`, `SIGABRT`, `SIGBUS`, `SIGFPE`, `SIGILL`, and `std::terminate`), `koto` records preexisting `sigaction` structs and terminate handlers.
+* **Minimal Async-Signal-Safe Teardown**: Upon a fatal signal, `restore_minimal()` emits a single atomic escape string to disable mouse tracking, pop Kitty keyboard flags, and restore the main screen, then immediately chains to the preexisting host handler (preserving crash reporters such as Google Breakpad, Crashpad, or backward-cpp).
+* **Inherited `nohup` Respect**: Inherited `SIG_IGN` on `SIGHUP` is preserved without override.
+
+### 4. FocusManager State Lifetimes & Hash Id Collision Detection
+* **Lifetime Contract**: `FocusManager` holds non-owning references (`&state`) to widget state structs for zero-allocation ergonomics. Callers must guarantee that registered states outlive the manager, are explicitly pruned using `fm.remove(state)` or `fm.remove(id)` before destruction, or are enclosed within an `IdScope` (modal focus trap), which auto-prunes targets on dismissal.
+* **Debug Collision Verification**: In debug builds (`#ifndef NDEBUG`), `FocusManager` maintains an address registry asserting that no two distinct state pointers produce colliding 32-bit FNV-1a hashes.
+
+### 5. Terminal Capabilities & Kitty Protocol
+* **Progressive Enhancement**: `koto` emits Kitty keyboard enhancement flag 1 (`\033[>1u`) on startup and pops it on teardown (`\033[<u`). On terminals lacking Kitty keyboard support, input decoding transparently falls back to standard ANSI, CSI, and SS3 escape sequences.
 
 ---
 
@@ -675,9 +719,9 @@ Run any showcase directly from `./build/`:
   - [x] Universal keyboard engine (ANSI, CSI, SS3, and Kitty `CSI u` protocol)
   - [x] Bracketed Paste Mode (`\033[?2004h`) with `PasteEvent` and newline normalization
   - [x] Headless virtual `Frame` for CI/CD automated snapshot testing
-  - [x] POSIX `signalfd` SIGWINCH terminal resize handling and RAII alternate screen buffer
+  - [x] POSIX self-pipe `SIGWINCH` terminal resize handling and RAII alternate screen buffer
   - [x] Robust stream I/O via `write_all()` loop with `EINTR` retry and short-write protection
-  - [x] Emergency signal teardown (`SIGTERM` & `SIGHUP`) with async-signal-safe terminal restoration
+  - [x] Emergency signal teardown (`SIGTERM`, `SIGHUP`, `SIGSEGV`, `SIGABRT`) with `nohup` preservation and async-signal-safe terminal restoration
 - [x] **Phase 2: State-Driven Widgets & Layouts**
   - [x] `Button` declarative focusable button with mouse click and keyboard activation
   - [x] `Fill` and `Clear` declarative background and canvas clearing widgets
@@ -692,15 +736,16 @@ Run any showcase directly from `./build/`:
   - [x] `Rule` horizontal dividers with embedded titles
   - [x] `Layout::grid` and `Layout::grid_uniform` 2D coordinate matrices
 - [x] **Phase 3: Focus Engine, Spatial Navigation & Modal Scoping**
-  - [x] `FocusManager` 1D ring focus graph traversal (`Tab` / `Shift+Tab`)
-  - [x] Auto-harvested 2D spatial arrow navigation (`Up`, `Down`, `Left`, `Right`) via centroid distance & angle cone
+  - [x] `FocusManager` 1D ring focus graph traversal (`Tab` / `Shift+Tab`) with hidden widget skipping
+  - [x] Auto-harvested 2D spatial arrow navigation (`Up`, `Down`, `Left`, `Right`) via Manhattan rectilinear projection
   - [x] Hardware-like 32-bit `Frame` hit-buffer with $O(1)$ spatial coordinate tagging
   - [x] SGR 1006 mouse protocol support (clicks, releases, drags, scroll wheel up/down)
   - [x] Sub-item direct mouse hit detection (`Tabs` headers, `List` rows, `TextArea` lines/cols)
   - [x] `IdScope` RAII modal focus trapping and background click shielding
   - [x] Pre-dispatch key interceptor hook for custom shortcuts and navigation overrides
+  - [x] Dynamic target removal (`remove(Id)`) for safe widget destruction
   - [x] `App::use_focus(fm)` seamless declarative runtime integration
-  - [x] `ioctl(FIONREAD)` input burst draining to eliminate input latency and packet splitting
+  - [x] `ioctl(FIONREAD)` input burst draining and monotonic deadline timer to eliminate input latency and packet splitting
 - [ ] **Phase 4: Advanced Data & Tree Components**
   - [ ] `Table` widget with sortable columns, header styles, horizontal scroll, and cell formatters
   - [ ] `Tree` widget for hierarchical directory structures and expandable nodes

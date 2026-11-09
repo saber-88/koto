@@ -10,6 +10,7 @@ include(CMakePackageConfigHelpers)
 
 option(KOTO_BUILD_TESTS "Build koto test suite" ON)
 option(KOTO_BUILD_EXAMPLES "Build koto example applications" ON)
+option(KOTO_ENABLE_WERROR "Treat compiler warnings as errors" OFF)
 
 add_library(koto
     src/terminal.cpp
@@ -46,7 +47,6 @@ target_compile_features(koto PUBLIC cxx_std_23)
 
 target_compile_options(koto PRIVATE 
     -Wall
-    -Werror
     -Wextra
     -Wpedantic
     -Wconversion
@@ -55,6 +55,10 @@ target_compile_options(koto PRIVATE
     -Wshadow
     -Wold-style-cast
 )
+
+if (KOTO_ENABLE_WERROR)
+    target_compile_options(koto PRIVATE -Werror)
+endif()
 
 # Installation targets
 install(TARGETS koto
@@ -119,7 +123,12 @@ if(KOTO_BUILD_TESTS)
         get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
         add_executable(${TEST_NAME} ${TEST_FILE})
         target_link_libraries(${TEST_NAME} PRIVATE koto::koto)
+        target_compile_options(${TEST_NAME} PRIVATE -UNDEBUG)
     endforeach()
-    add_test(NAME headless_snapshot_tests COMMAND test6_headless_test)
+    add_test(NAME headless_widgets COMMAND test_headless_widgets)
+    add_test(NAME headless_layout COMMAND test_headless_layout)
+    add_test(NAME headless_focus_events COMMAND test_headless_focus_events)
+    add_test(NAME headless_render_terminal COMMAND test_headless_render_terminal)
+    add_test(NAME headless_regressions COMMAND test_headless_regressions)
     add_test(NAME cjk_emoji_tests COMMAND test8_text_cjk_emoji)
 endif()

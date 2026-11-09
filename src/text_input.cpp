@@ -91,12 +91,7 @@ namespace koto
             return false;
         }
 
-        this->cursor = std::min(this->cursor, this->value.size());
-        size_t prev = this->cursor - 1;
-        while (prev > 0 && (static_cast<uint8_t>(this->value[prev]) & 0xC0) == 0x80)
-        {
-            prev--;
-        }
+        size_t prev = prev_grapheme_offset(this->value, this->cursor);
         this->value.erase(prev, this->cursor - prev);
         this->cursor = prev;
         return true;
@@ -109,11 +104,7 @@ namespace koto
             return false;
         }
 
-        size_t next = this->cursor + 1;
-        while (next < this->value.size() && (static_cast<uint8_t>(this->value[next]) & 0xC0) == 0x80)
-        {
-            next++;
-        }
+        size_t next = next_grapheme_offset(this->value, this->cursor);
         this->value.erase(this->cursor, next - this->cursor);
         return true;
     }
@@ -148,13 +139,7 @@ namespace koto
             return false;
         }
 
-        this->cursor = std::min(this->cursor, this->value.size());
-        size_t prev = this->cursor - 1;
-        while (prev > 0 && (static_cast<uint8_t>(this->value[prev]) & 0xC0) == 0x80)
-        {
-            prev--;
-        }
-        this->cursor = prev;
+        this->cursor = prev_grapheme_offset(this->value, this->cursor);
         return true;
     }
 
@@ -165,12 +150,7 @@ namespace koto
             return false;
         }
 
-        size_t next = this->cursor + 1;
-        while (next < this->value.size() && (static_cast<uint8_t>(this->value[next]) & 0xC0) == 0x80)
-        {
-            next++;
-        }
-        this->cursor = next;
+        this->cursor = next_grapheme_offset(this->value, this->cursor);
         return true;
     }
 
@@ -391,7 +371,7 @@ namespace koto
 
         struct VisualChar
         {
-            char32_t cp = 0;
+            Grapheme g;
             int col_start = 0;
             int width = 0;
         };
@@ -408,9 +388,10 @@ namespace koto
             {
                 cursor_visual_col = cur_col;
             }
-            char32_t cp = next_codepoint(remaining);
-            int w = codepoint_width(cp);
-            chars.push_back({cp, cur_col, w});
+            Grapheme g = next_grapheme(remaining);
+            if (g.empty()) break;
+            int w = g.width;
+            chars.push_back({g, cur_col, w});
             cur_col += w;
         }
 
@@ -439,7 +420,7 @@ namespace koto
             int screen_col = inner.col + (ch.col_start - m_state.scroll_offset);
             if (screen_col >= inner.col && screen_col + ch.width <= inner.right())
             {
-                frame.set_cell(row, screen_col, {ch.cp, m_fg, m_bg});
+                frame.set_cell(row, screen_col, Cell{ch.g, m_fg, m_bg});
             }
         }
 

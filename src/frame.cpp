@@ -74,8 +74,7 @@ namespace koto
         if (col > 0 && m_back_buffer[idx].continuation)
         {
             size_t owner = idx - 1;
-            m_back_buffer[owner].ch = U' ';
-            m_back_buffer[owner].width = 1;
+            m_back_buffer[owner] = Cell{U' '};
         }
 
         // 2. If this cell was previously a wide character head, clear its continuation cell
@@ -84,8 +83,26 @@ namespace koto
             m_back_buffer[idx + 1] = Cell{};
         }
 
-        int w = codepoint_width(c.ch);
-        if (w == 2 && col + 1 >= m_cols) { c.ch = U' '; w = 1; }
+        int w = c.width;
+        if (w <= 0)
+        {
+            w = (c.grapheme.width > 0 && c.grapheme.width != 1)
+                ? static_cast<int>(c.grapheme.width)
+                : codepoint_width(c.ch);
+        }
+        else if (c.grapheme.width > w)
+        {
+            w = static_cast<int>(c.grapheme.width);
+        }
+        else if (w == 1 && codepoint_width(c.ch) == 2)
+        {
+            w = 2;
+        }
+        if (w == 2 && col + 1 >= m_cols)
+        {
+            c = Cell{U' '};
+            w = 1;
+        }
 
         // 3. If placing a wide character (width 2), it will overwrite idx and idx + 1:
         // If idx + 1 was previously a wide char head, clear its continuation cell at idx + 2!
@@ -95,7 +112,7 @@ namespace koto
             {
                 m_back_buffer[idx + 2] = Cell{};
             }
-            m_back_buffer[idx + 1] = Cell{.continuation = true};
+            m_back_buffer[idx + 1] = Cell::make_continuation();
             if (!tag_id.is_none())
             {
                 m_hit_buffer[idx + 1] = static_cast<int>(tag_id.value());
@@ -103,6 +120,7 @@ namespace koto
         }
 
         c.width = w;
+        c.grapheme.width = static_cast<uint8_t>(w);
         m_back_buffer[idx] = c;
 
         // 4. Update hit buffer and tag bounds
@@ -307,8 +325,7 @@ namespace koto
 
         m_output.append(buf, static_cast<size_t>(offset));
 
-        auto encoded = encode_utf8(c.ch);
-        m_output.append(encoded.view());
+        m_output.append(c.grapheme.view());
     }
 
     auto Frame::render(bool flush) -> void
@@ -352,6 +369,7 @@ namespace koto
         m_cur_attrs = 0xFF;
         int cursor_row = -1;
         int cursor_col = -1;
+        bool last_cell_was_ascii = false;
 
         for(int r = 0; r < m_rows; r++)
         {
@@ -370,12 +388,17 @@ namespace koto
                     continue;
                 }
                 
-                // skip cursor move if we're already at the right position
-                if (r != cursor_row || c != cursor_col)
+                // Only skip cursor move if we are sequentially moving across standard single-width ASCII cells.
+                // For any Unicode/wide/multibyte/continuation characters, terminal emulators or fonts may have subtle
+                // width variations; forcing cursor repositioning after any non-ASCII cell guarantees that cursor drift
+                // can NEVER propagate into adjacent cells or displace widget borders!
+                bool can_skip_cursor = (r == cursor_row && c == cursor_col && last_cell_was_ascii);
+                if (!can_skip_cursor)
                 {
                     this->move_cursor(r, c);
                 }
                 this->paint_cell(back);
+                last_cell_was_ascii = (back.width == 1 && back.ch >= 0x20 && back.ch < 0x7F && back.grapheme.size == 1);
                 cursor_col = c + back.width;
                 cursor_row = r;
 
@@ -522,9 +545,15 @@ namespace koto
             const Cell& cell = m_back_buffer[static_cast<size_t>(r * m_cols + c)];
             if (cell.continuation) continue;
 
-            char utf8[5] = {};
-            int len = encode_utf8(cell.ch == 0 ? U' ' : cell.ch, utf8);
-            row_str.append(utf8, static_cast<size_t>(len));
+            std::string_view sv = cell.grapheme.view();
+            if (sv.empty())
+            {
+                row_str.push_back(' ');
+            }
+            else
+            {
+                row_str.append(sv);
+            }
         }
 
         // Trim trailing whitespace for clean snapshot comparison

@@ -122,6 +122,8 @@ namespace koto
                     .id = m_fm->scoped_id(m_id),
                     .bounds = area,
                     .modal_scope = current_modal,
+                    .enabled = true,
+                    .visible = true,
                     .set_focus = nullptr,
                     .handle_key = [cb = m_on_click](const KeyEvent& k) {
                         if (k.is(Key::Enter) || k.ch == ' ')
@@ -139,6 +141,7 @@ namespace koto
                         }
                         return false;
                     },
+                    .handle_paste = nullptr,
                     .on_focus = nullptr,
                     .on_blur = nullptr
                 };
@@ -170,12 +173,19 @@ namespace koto
             Area text_area = area;
             if (area.height > 2 && area.width > 2 && m_border_style != BorderStyle::None)
             {
-                text_area = area.inset(1, 1, 1, 1);
+                int target_row = area.row + (area.height - 1) / 2;
+                text_area = Area{target_row, area.col + 1, area.width - 2, 1};
+            }
+            else if (m_border_style == BorderStyle::None)
+            {
+                int target_row = area.row + (area.height - 1) / 2;
+                text_area = Area{target_row, area.col, area.width, 1};
             }
 
             Text(m_label)
                 .fg(text_col)
                 .bg(bg_col)
+                .clip()
                 .align(TextAlign::Center)
                 .draw(frame, text_area);
         }

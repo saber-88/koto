@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
+#include <string_view>
 #include "koto/color.hpp"
+#include "koto/utf8.hpp"
 
 namespace koto {
 
@@ -25,14 +27,47 @@ namespace koto {
     }
 
     struct Cell {
+        Grapheme grapheme{};
         char32_t ch = U' ';
         uint32_t fg = COLOR_DEFAULT;
         uint32_t bg = COLOR_DEFAULT;
         int width = 1;
         bool continuation = false;
         uint8_t attrs = 0;
-        bool operator==(const Cell&) const = default;
 
+        constexpr Cell() noexcept = default;
+
+        constexpr Cell(char32_t cp, uint32_t f = COLOR_DEFAULT, uint32_t b = COLOR_DEFAULT,
+                       int w = 0, bool cont = false, uint8_t att = 0) noexcept
+            : grapheme(cp, w > 0 ? w : (cp == 0 ? 0 : 1)), ch(cp), fg(f), bg(b),
+              width(w > 0 ? w : (cp == 0 ? 0 : 1)), continuation(cont), attrs(att)
+        {}
+
+        constexpr Cell(Grapheme g, uint32_t f = COLOR_DEFAULT, uint32_t b = COLOR_DEFAULT,
+                       bool cont = false, uint8_t att = 0) noexcept
+            : grapheme(g), ch(g.base_cp), fg(f), bg(b), width(g.width), continuation(cont), attrs(att)
+        {}
+
+        constexpr Cell(Grapheme g, uint32_t f, uint32_t b, int w,
+                       bool cont = false, uint8_t att = 0) noexcept
+            : grapheme(g), ch(g.base_cp), fg(f), bg(b), width(w), continuation(cont), attrs(att)
+        {
+            grapheme.width = static_cast<uint8_t>(w > 0 ? w : 1);
+        }
+
+        [[nodiscard]] constexpr std::string_view view() const noexcept
+        {
+            return grapheme.view();
+        }
+
+        static constexpr Cell make_continuation() noexcept
+        {
+            Cell c{};
+            c.continuation = true;
+            return c;
+        }
+
+        bool operator==(const Cell&) const = default;
     };
 
 }

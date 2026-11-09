@@ -126,9 +126,10 @@ namespace koto
         int col = start_col;
         while (!remaining.empty() && col < area.right())
         {
-            char32_t cp = next_codepoint(remaining);
-            int w = codepoint_width(cp);
-            frame.set_cell(row, col, {cp, t_fg, t_bg});
+            Grapheme g = next_grapheme(remaining);
+            if (g.empty()) break;
+            int w = g.width;
+            frame.set_cell(row, col, Cell{g, t_fg, t_bg});
             col += w;
         }
     }
