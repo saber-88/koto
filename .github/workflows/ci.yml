@@ -32,14 +32,14 @@ jobs:
             cxx: clang++-17
             cc: clang-17
             build_type: Release
-            cxx_flags: "-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -D_FORTIFY_SOURCE=2 -O2 --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13 -D__cpp_concepts=202002L -Wno-builtin-macro-redefined"
+            cxx_flags: "-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -D_FORTIFY_SOURCE=2 -O2 --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13"
             install_pkgs: clang-17 gcc-13 g++-13 libstdc++-13-dev
 
           - name: "Clang 17 (C++23) - Debug + ASan/UBSan"
             cxx: clang++-17
             cc: clang-17
             build_type: Debug
-            cxx_flags: "-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -fsanitize=address,undefined -fno-omit-frame-pointer -g --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13 -D__cpp_concepts=202002L -Wno-builtin-macro-redefined"
+            cxx_flags: "-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wsign-compare -Wshadow -Wold-style-cast -fsanitize=address,undefined -fno-omit-frame-pointer -g --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/13"
             install_pkgs: clang-17 gcc-13 g++-13 libstdc++-13-dev
 
     steps:
