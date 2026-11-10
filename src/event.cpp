@@ -639,10 +639,19 @@ namespace koto
             return true;
         }
 
-        // Bracketed paste is an atomic multi-byte stream; do NOT abort on short escape timeout (R1 fix)
+        // Bracketed paste is an atomic multi-byte stream; check for 500ms inactivity timeout or 4MB cap (N4 fix)
         if (m_pending_input.starts_with("\033[200~"))
         {
-            return false;
+            if (m_pending_input.size() > 4 * 1024 * 1024)
+            {
+                return true;
+            }
+            if (m_paste_deadline == std::chrono::steady_clock::time_point{})
+            {
+                m_paste_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+                return false;
+            }
+            return std::chrono::steady_clock::now() >= m_paste_deadline;
         }
 
         // Short incomplete sequences (ESC disambiguation or partial UTF-8):
@@ -659,6 +668,37 @@ namespace koto
         return false;
     }
 
+    auto EventLoop::flush_incomplete_paste() -> Event
+    {
+        m_paste_deadline = {};
+        if (m_pending_input.size() < 6 || !m_pending_input.starts_with("\033[200~"))
+        {
+            m_pending_input.clear();
+            return TickEvent{};
+        }
+
+        std::string_view raw = std::string_view(m_pending_input).substr(6);
+        std::string text;
+        text.reserve(raw.size());
+        for (size_t i = 0; i < raw.size(); ++i)
+        {
+            if (raw[i] == '\r')
+            {
+                if (i + 1 < raw.size() && raw[i + 1] == '\n')
+                {
+                    continue;
+                }
+                text.push_back('\n');
+            }
+            else
+            {
+                text.push_back(raw[i]);
+            }
+        }
+        m_pending_input.clear();
+        return PasteEvent{std::move(text)};
+    }
+
     auto EventLoop::flush_incomplete_escape() -> Event
     {
         m_escape_deadline = {};
@@ -667,10 +707,10 @@ namespace koto
             return TickEvent{};
         }
 
-        // Bracketed paste must never be torn apart by flush_incomplete_escape (R1 fix)
+        // Bracketed paste must never be torn apart by flush_incomplete_escape (R1/N4 fix)
         if (m_pending_input.starts_with("\033[200~"))
         {
-            return TickEvent{};
+            return flush_incomplete_paste();
         }
 
         if (m_pending_input[0] != '\033')
@@ -725,15 +765,28 @@ namespace koto
         if (res.status == ParseStatus::Complete)
         {
             m_escape_deadline = {};
+            m_paste_deadline = {};
             m_pending_input.erase(0, res.consumed);
             return res.event;
         }
 
         if (res.status == ParseStatus::Incomplete)
         {
-            // Do NOT apply short timeout to bracketed paste (R1 fix)
+            // Incomplete bracketed paste: check 500ms inactivity deadline or 4MB cap (N4 fix)
             if (m_pending_input.starts_with("\033[200~"))
             {
+                if (m_pending_input.size() > 4 * 1024 * 1024)
+                {
+                    return flush_incomplete_paste();
+                }
+                if (m_paste_deadline == std::chrono::steady_clock::time_point{})
+                {
+                    m_paste_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+                }
+                else if (std::chrono::steady_clock::now() >= m_paste_deadline)
+                {
+                    return flush_incomplete_paste();
+                }
                 return TickEvent{};
             }
 
@@ -753,7 +806,11 @@ namespace koto
         // Invalid sequence / malformed byte: drop bad byte
         size_t to_drop = res.consumed > 0 ? res.consumed : 1;
         m_pending_input.erase(0, to_drop);
-        if (m_pending_input.empty()) m_escape_deadline = {};
+        if (m_pending_input.empty())
+        {
+            m_escape_deadline = {};
+            m_paste_deadline = {};
+        }
         return TickEvent{};
     }
 
@@ -786,6 +843,7 @@ namespace koto
             if (res.status == ParseStatus::Complete)
             {
                 m_escape_deadline = {};
+                m_paste_deadline = {};
                 m_pending_input.erase(0, res.consumed);
                 return res.event;
             }
@@ -793,11 +851,30 @@ namespace koto
             {
                 size_t to_drop = res.consumed > 0 ? res.consumed : 1;
                 m_pending_input.erase(0, to_drop);
-                if (m_pending_input.empty()) m_escape_deadline = {};
+                if (m_pending_input.empty())
+                {
+                    m_escape_deadline = {};
+                    m_paste_deadline = {};
+                }
                 return poll(0);
             }
             // ParseStatus::Incomplete:
-            if (!m_pending_input.starts_with("\033[200~"))
+            if (m_pending_input.starts_with("\033[200~"))
+            {
+                if (m_pending_input.size() > 4 * 1024 * 1024)
+                {
+                    return flush_incomplete_paste();
+                }
+                if (m_paste_deadline == std::chrono::steady_clock::time_point{})
+                {
+                    m_paste_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+                }
+                else if (std::chrono::steady_clock::now() >= m_paste_deadline)
+                {
+                    return flush_incomplete_paste();
+                }
+            }
+            else
             {
                 if (m_escape_deadline == std::chrono::steady_clock::time_point{})
                 {
@@ -812,6 +889,7 @@ namespace koto
         else
         {
             m_escape_deadline = {};
+            m_paste_deadline = {};
         }
 
         // 2. Wait for stdin or self-pipe (SIGWINCH resize / async wakeup)
@@ -822,7 +900,25 @@ namespace koto
         };
 
         int eff_timeout = timeout_ms;
-        if (!m_pending_input.starts_with("\033[200~") && m_escape_deadline != std::chrono::steady_clock::time_point{})
+        if (m_pending_input.starts_with("\033[200~"))
+        {
+            auto now = std::chrono::steady_clock::now();
+            if (m_paste_deadline == std::chrono::steady_clock::time_point{})
+            {
+                m_paste_deadline = now + std::chrono::milliseconds(500);
+            }
+            if (now >= m_paste_deadline || m_pending_input.size() > 4 * 1024 * 1024)
+            {
+                return flush_incomplete_paste();
+            }
+            auto rem_ms = std::chrono::duration_cast<std::chrono::milliseconds>(m_paste_deadline - now).count();
+            int paste_rem = static_cast<int>(std::max<int64_t>(1, rem_ms));
+            if (eff_timeout < 0 || eff_timeout > paste_rem)
+            {
+                eff_timeout = paste_rem;
+            }
+        }
+        else if (m_escape_deadline != std::chrono::steady_clock::time_point{})
         {
             auto now = std::chrono::steady_clock::now();
             if (now >= m_escape_deadline)
@@ -841,7 +937,14 @@ namespace koto
 
         if (ret <= 0)
         {
-            if (!m_pending_input.starts_with("\033[200~") && m_escape_deadline != std::chrono::steady_clock::time_point{})
+            if (m_pending_input.starts_with("\033[200~"))
+            {
+                if (std::chrono::steady_clock::now() >= m_paste_deadline || m_pending_input.size() > 4 * 1024 * 1024)
+                {
+                    return flush_incomplete_paste();
+                }
+            }
+            else if (m_escape_deadline != std::chrono::steady_clock::time_point{})
             {
                 if (std::chrono::steady_clock::now() >= m_escape_deadline)
                 {
@@ -909,8 +1012,12 @@ namespace koto
                 }
             }
 
-            // Reset deadline on new incoming bytes (R1 fix)
-            if (m_escape_deadline != std::chrono::steady_clock::time_point{})
+            // Reset deadline on new incoming bytes (R1 / N4 fix)
+            if (m_pending_input.starts_with("\033[200~"))
+            {
+                m_paste_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+            }
+            else if (m_escape_deadline != std::chrono::steady_clock::time_point{})
             {
                 m_escape_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(35);
             }

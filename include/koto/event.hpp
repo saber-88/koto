@@ -173,7 +173,11 @@ namespace koto
             void feed(std::string_view bytes)
             {
                 m_pending_input.append(bytes);
-                if (m_escape_deadline != std::chrono::steady_clock::time_point{})
+                if (m_pending_input.starts_with("\033[200~"))
+                {
+                    m_paste_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+                }
+                else if (m_escape_deadline != std::chrono::steady_clock::time_point{})
                 {
                     m_escape_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(35);
                 }
@@ -190,10 +194,12 @@ namespace koto
             int m_pipe_fds[2] = {-1, -1};
             bool m_eof = false;
             mutable std::chrono::steady_clock::time_point m_escape_deadline{};
+            mutable std::chrono::steady_clock::time_point m_paste_deadline{};
 
             auto on_resize() -> Event;
             auto parse_stdin() -> Event;
             auto flush_incomplete_escape() -> Event;
+            auto flush_incomplete_paste() -> Event;
 
     };
 }

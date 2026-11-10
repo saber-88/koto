@@ -56,13 +56,27 @@ namespace koto
         {
             if (m_targets[i].id == target.id)
             {
+                // Collision detection logic (N1 & N2 fix):
+                // If neither target has an explicit custom ID (both auto-derived from pointer Id(&state)),
+                // and both have non-null state pointers pointing to DIFFERENT addresses,
+                // that indicates a true 32-bit hash collision between distinct state objects!
+                if (!m_targets[i].has_custom_id && !target.has_custom_id &&
+                    m_targets[i].state_ptr != nullptr && target.state_ptr != nullptr)
+                {
+                    assert(m_targets[i].state_ptr == target.state_ptr &&
+                           "FocusManager: 32-bit Id hash collision detected between two distinct state objects!");
+                }
+
                 m_targets[i].bounds = target.bounds;
                 m_targets[i].modal_scope = target.modal_scope;
                 m_targets[i].set_focus = std::move(target.set_focus);
                 m_targets[i].handle_key = std::move(target.handle_key);
                 m_targets[i].handle_mouse = std::move(target.handle_mouse);
+                m_targets[i].handle_paste = std::move(target.handle_paste);
                 m_targets[i].on_focus = std::move(target.on_focus);
                 m_targets[i].on_blur = std::move(target.on_blur);
+                m_targets[i].state_ptr = target.state_ptr;
+                m_targets[i].has_custom_id = target.has_custom_id;
 
                 // Re-sync focus state (C-35)
                 if (m_targets[i].set_focus)
@@ -180,10 +194,6 @@ namespace koto
                     m_active_index = m_targets.size() - 1;
                     if (m_targets[m_active_index].set_focus) m_targets[m_active_index].set_focus(true);
                 }
-#ifndef NDEBUG
-                m_debug_pointer_registry.erase(scoped.value());
-                m_debug_pointer_registry.erase(id.value());
-#endif
                 return true;
             }
         }
@@ -522,9 +532,6 @@ namespace koto
         m_active_index = 0;
         m_scope_stack.clear();
         m_saved_focus_stack.clear();
-#ifndef NDEBUG
-        m_debug_pointer_registry.clear();
-#endif
     }
 
     bool FocusManager::handle_key(const KeyEvent& key)

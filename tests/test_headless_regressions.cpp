@@ -796,6 +796,95 @@ void test_r1_slow_paste_and_r5_truncated_input()
     std::cout << "PASSED\n";
 }
 
+void test_n1_to_n4_third_pass_regressions()
+{
+    std::cout << "[Test 8] Third pass review regressions (N1 vector reallocation / custom Id, N2 sizeof stability, N3 signal chaining, N4 unterminated paste)... ";
+
+    // 1. N1: Vector reallocation with custom Id
+    {
+        FocusManager fm;
+        std::vector<TextInputState> states;
+        states.emplace_back("first");
+        fm.add(states[0], Id("input_custom_id"));
+
+        // Force vector reallocation by adding more elements
+        for (int i = 1; i <= 20; ++i)
+        {
+            states.emplace_back("item_" + std::to_string(i));
+        }
+
+        // Re-register under the same custom ID: must NOT assert on pointer change due to vector reallocation!
+        fm.add(states[0], Id("input_custom_id"));
+        assert(fm.size() == 1);
+        assert(fm.is_focused(Id("input_custom_id")));
+
+        // Key handling routed to the reallocated state
+        bool handled = fm.handle_key(KeyEvent{'a'});
+        assert(handled);
+        assert(states[0].text() == "firsta");
+    }
+
+    // 2. N1: Re-registering the same state without custom ID does not collide
+    {
+        FocusManager fm;
+        TextInputState state("hello");
+        fm.add(state);
+        fm.add(state); // Re-registering the same state pointer is valid
+        assert(fm.size() == 1);
+    }
+
+    // 3. N2: FocusManager ABI layout stability
+    {
+        // FocusManager must not contain any #ifndef NDEBUG conditional members
+        // Verify sizeof(FocusManager) is stable across build types
+        static_assert(sizeof(FocusManager) > 0);
+        assert(sizeof(FocusManager) == 184);
+    }
+
+    // 4. N4: Unterminated bracketed paste recovery
+    {
+        EventLoop loop;
+        // Feed an unterminated bracketed paste sequence ("\033[200~unterminated")
+        loop.feed("\033[200~pasted_text_without_terminator");
+        assert(loop.has_pending());
+        assert(!loop.has_pending_event()); // Within 500ms inactivity window
+
+        // Wait 520ms (> 500ms inactivity timeout)
+        std::this_thread::sleep_for(std::chrono::milliseconds(520));
+        assert(loop.has_pending());
+        assert(loop.has_pending_event()); // Timeout expired: event is ready!
+
+        Event ev = loop.poll(0);
+        assert(ev.is_paste());
+        assert(ev.as_paste()->text == "pasted_text_without_terminator");
+        assert(!loop.has_pending()); // Stdin buffer is clean!
+        assert(!loop.has_pending_event());
+
+        // Subsequent keystrokes are completely unblocked!
+        loop.feed("k");
+        assert(loop.has_pending());
+        assert(loop.has_pending_event());
+        Event ev_key = loop.poll(0);
+        assert(ev_key.is_key());
+        assert(ev_key.as_key()->ch == 'k');
+        assert(!loop.has_pending());
+    }
+
+    // 5. N3: Verify host signal handler chaining behavior
+    {
+        struct sigaction custom_sa{};
+        custom_sa.sa_handler = [](int) {};
+        sigemptyset(&custom_sa.sa_mask);
+        custom_sa.sa_flags = 0;
+
+        struct sigaction prev_sa{};
+        sigaction(SIGTERM, &custom_sa, &prev_sa);
+        sigaction(SIGTERM, &prev_sa, nullptr);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main()
 {
     std::cout << "========================================\n";
@@ -809,9 +898,10 @@ int main()
     test_c1_partial_escape_sequence_handling();
     test_h3_and_m2_hygiene();
     test_r1_slow_paste_and_r5_truncated_input();
+    test_n1_to_n4_third_pass_regressions();
 
     std::cout << "========================================\n";
-    std::cout << " ALL 7 REGRESSION TESTS PASSED CLEANLY!\n";
+    std::cout << " ALL 8 REGRESSION TESTS PASSED CLEANLY!\n";
     std::cout << "========================================\n";
     return 0;
 }

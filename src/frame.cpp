@@ -131,7 +131,7 @@ namespace koto
             auto it = m_tag_bounds.find(tag_id.value());
             if (it == m_tag_bounds.end())
             {
-                m_tag_bounds[tag_id.value()] = cell_area;
+                m_tag_bounds.emplace(tag_id.value(), cell_area);
             }
             else
             {
@@ -155,7 +155,7 @@ namespace koto
             auto it = m_tag_bounds.find(tag_id.value());
             if (it == m_tag_bounds.end())
             {
-                m_tag_bounds[tag_id.value()] = area;
+                m_tag_bounds.emplace(tag_id.value(), area);
             }
             else
             {
@@ -471,7 +471,7 @@ namespace koto
             auto it = m_tag_bounds.find(tag_id.value());
             if (it == m_tag_bounds.end())
             {
-                m_tag_bounds[tag_id.value()] = cell_area;
+                m_tag_bounds.emplace(tag_id.value(), cell_area);
             }
             else
             {
@@ -497,7 +497,7 @@ namespace koto
             auto it = m_tag_bounds.find(tag_id.value());
             if (it == m_tag_bounds.end())
             {
-                m_tag_bounds[tag_id.value()] = area;
+                m_tag_bounds.emplace(tag_id.value(), area);
             }
             else
             {

@@ -37,6 +37,11 @@ namespace
         errno = saved_errno;
     }
 
+    static constexpr bool is_crash_signal(int sig) noexcept
+    {
+        return sig == SIGSEGV || sig == SIGABRT || sig == SIGBUS || sig == SIGFPE || sig == SIGILL;
+    }
+
     static const struct sigaction* get_old_sigaction(int sig) noexcept
     {
         switch (sig)
@@ -56,10 +61,48 @@ namespace
 
     void on_fatal_signal(int sig, siginfo_t* info, void* ucontext)
     {
+        const struct sigaction* old_sa = get_old_sigaction(sig);
+
+        // N3 fix: Differentiate termination signals from crash signals.
+        // For termination signals (SIGTERM, SIGINT, SIGQUIT, SIGHUP), check if host registered a custom handler.
+        if (!is_crash_signal(sig))
+        {
+            if (old_sa)
+            {
+                if ((old_sa->sa_flags & SA_SIGINFO) && old_sa->sa_sigaction)
+                {
+                    // Host application custom sigaction: delegate without resetting terminal mode
+                    old_sa->sa_sigaction(sig, info, ucontext);
+                    return;
+                }
+                if (old_sa->sa_handler != SIG_DFL && old_sa->sa_handler != SIG_IGN)
+                {
+                    // Host application custom signal handler: delegate without resetting terminal mode
+                    old_sa->sa_handler(sig);
+                    return;
+                }
+                if (old_sa->sa_handler == SIG_IGN)
+                {
+                    return;
+                }
+            }
+
+            // No custom handler; default action applies (process termination).
+            // Cleanly restore terminal to cooked state before re-raising with default disposition.
+            restore_minimal();
+            struct sigaction dfl_sa{};
+            dfl_sa.sa_handler = SIG_DFL;
+            sigemptyset(&dfl_sa.sa_mask);
+            sigaction(sig, &dfl_sa, nullptr);
+            raise(sig);
+            return;
+        }
+
+        // Fatal crash signals (SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL):
+        // Terminal mode MUST be restored immediately to prevent corrupting user's terminal upon crash
         restore_minimal();
 
-        // Chain to previous signal handler if one was registered (R4 fix)
-        const struct sigaction* old_sa = get_old_sigaction(sig);
+        // Chain to previous crash handler if one was registered (e.g. crash reporter / backtrace)
         if (old_sa)
         {
             if ((old_sa->sa_flags & SA_SIGINFO) && old_sa->sa_sigaction)
@@ -74,6 +117,10 @@ namespace
             }
         }
 
+        struct sigaction dfl_sa{};
+        dfl_sa.sa_handler = SIG_DFL;
+        sigemptyset(&dfl_sa.sa_mask);
+        sigaction(sig, &dfl_sa, nullptr);
         raise(sig);
     }
 
@@ -108,7 +155,7 @@ namespace
         struct sigaction sa{};
         sa.sa_sigaction = on_fatal_signal;
         sigemptyset(&sa.sa_mask);
-        sa.sa_flags = static_cast<int>(SA_RESETHAND | SA_SIGINFO);
+        sa.sa_flags = static_cast<int>(SA_SIGINFO);
 
         sigaction(SIGTERM, &sa, &g_old_term);
         sigaction(SIGINT,  &sa, &g_old_int);

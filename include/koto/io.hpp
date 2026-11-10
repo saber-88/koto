@@ -19,8 +19,8 @@ namespace koto
             if (written <= 0)
             {
                 if (written < 0 && errno == EINTR) continue;
-                if (written == 0) return std::unexpected<int>(EIO);
-                return std::unexpected<int>(errno);
+                if (written == 0) return std::unexpected(EIO);
+                return std::unexpected(errno);
             }
             ptr += written;
             rem -= static_cast<size_t>(written);

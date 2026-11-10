@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <functional>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -113,6 +112,8 @@ namespace koto
         std::function<bool(const std::string&)> handle_paste;// routes paste event to the underlying state
         std::function<void()> on_focus;                      // optional user hook when focus gained
         std::function<void()> on_blur;                       // optional user hook when focus lost
+        const void* state_ptr = nullptr;                    // underlying state address for collision check (N1/N2)
+        bool has_custom_id = false;                         // true if caller supplied an explicit custom Id
 
         bool is_focusable(bool require_geometry = true) const noexcept
         {
@@ -145,20 +146,10 @@ namespace koto
         template<FocusableState T>
         FocusManager& add(T& state, Id custom_id = Id::none())
         {
-            Id id = custom_id.is_none() ? Id(&state) : custom_id;
+            bool has_custom = !custom_id.is_none();
+            Id id = has_custom ? custom_id : Id(&state);
             Id scoped = this->scoped_id(id);
             Id current_modal = this->active_modal_scope();
-
-#ifndef NDEBUG
-            // Debug check for 32-bit hash Id collisions between distinct states (R6)
-            auto it = m_debug_pointer_registry.find(scoped.value());
-            if (it != m_debug_pointer_registry.end())
-            {
-                assert(it->second == static_cast<const void*>(&state) &&
-                       "FocusManager: 32-bit Id hash collision detected between two distinct state objects!");
-            }
-            m_debug_pointer_registry[scoped.value()] = static_cast<const void*>(&state);
-#endif
 
             std::function<bool(const MouseEvent&)> mouse_handler = nullptr;
             if constexpr (HasMouseHandler<T>)
@@ -186,7 +177,9 @@ namespace koto
                 .handle_mouse = std::move(mouse_handler),
                 .handle_paste = std::move(paste_handler),
                 .on_focus = nullptr,
-                .on_blur = nullptr
+                .on_blur = nullptr,
+                .state_ptr = static_cast<const void*>(&state),
+                .has_custom_id = has_custom
             };
 
             this->register_target(std::move(target));
@@ -317,9 +310,5 @@ namespace koto
         FocusKeyInterceptor m_key_interceptor = nullptr;
         FocusChangeValidator m_change_validator = nullptr;
         FocusChangeObserver m_change_observer = nullptr;
-
-#ifndef NDEBUG
-        std::unordered_map<uint32_t, const void*> m_debug_pointer_registry;
-#endif
     };
 }
