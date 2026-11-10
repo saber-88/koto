@@ -324,6 +324,7 @@ namespace koto
         if (m_state)
         {
             m_state->rendered_tabs.clear();
+            m_state->rendered_tabs.reserve(titles.size());
         }
 
         size_t active_idx = m_state ? m_state->selected : m_selected;

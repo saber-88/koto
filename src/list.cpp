@@ -373,29 +373,29 @@ namespace koto
                 }
             }
 
-            std::string line_text;
+            int col = row_area.col;
             if (!m_highlight_symbol.empty())
             {
+                int sym_w = text_width(m_highlight_symbol);
                 if (is_selected)
                 {
-                    line_text = m_highlight_symbol + m_state.items[static_cast<size_t>(item_idx)];
+                    Text(m_highlight_symbol)
+                        .fg(current_fg)
+                        .bg(current_bg)
+                        .draw(frame, Area{row_area.row, col, sym_w, 1});
                 }
-                else
-                {
-                    int sym_w = text_width(m_highlight_symbol);
-                    line_text = std::string(static_cast<size_t>(sym_w > 0 ? sym_w : 0), ' ') + m_state.items[static_cast<size_t>(item_idx)];
-                }
-            }
-            else
-            {
-                line_text = m_state.items[static_cast<size_t>(item_idx)];
+                col += (sym_w > 0 ? sym_w : 0);
             }
 
-            Text(line_text)
-                .fg(current_fg)
-                .bg(current_bg)
-                .overflow(m_overflow)
-                .draw(frame, row_area);
+            if (col < row_area.right())
+            {
+                std::string_view item_sv(m_state.items[static_cast<size_t>(item_idx)]);
+                Text(item_sv)
+                    .fg(current_fg)
+                    .bg(current_bg)
+                    .overflow(m_overflow)
+                    .draw(frame, Area{row_area.row, col, row_area.right() - col, 1});
+            }
         }
     }
 }

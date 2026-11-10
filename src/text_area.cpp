@@ -4,6 +4,7 @@
 #include "koto/frame.hpp"
 #include "koto/utf8.hpp"
 #include <algorithm>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <ranges>
@@ -547,7 +548,9 @@ namespace koto
         if (show_gutter)
         {
             size_t total_lines = m_state.text.size();
-            digit_w = static_cast<int>(std::to_string(std::max<size_t>(1, total_lines)).size());
+            char digit_buf[32];
+            auto res = std::to_chars(digit_buf, digit_buf + sizeof(digit_buf), std::max<size_t>(1, total_lines));
+            digit_w = static_cast<int>(res.ptr - digit_buf);
             digit_w = std::max(2, digit_w);
             gutter_w = digit_w + 2; // e.g. "  1 │" (digit_w chars + space + bar)
             if (inner.width <= gutter_w + 1)
@@ -622,7 +625,9 @@ namespace koto
             {
                 if (line_idx < m_state.text.size())
                 {
-                    std::string num_str = std::to_string(line_idx + 1);
+                    char num_buf[32];
+                    auto res = std::to_chars(num_buf, num_buf + sizeof(num_buf), line_idx + 1);
+                    std::string_view num_str(num_buf, static_cast<size_t>(res.ptr - num_buf));
                     int pad = digit_w - static_cast<int>(num_str.size());
                     int g_col = inner.col;
 

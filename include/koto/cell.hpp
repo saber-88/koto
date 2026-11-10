@@ -31,16 +31,17 @@ namespace koto {
         char32_t ch = U' ';
         uint32_t fg = COLOR_DEFAULT;
         uint32_t bg = COLOR_DEFAULT;
-        int width = 1;
+        uint8_t width = 1;
         bool continuation = false;
         uint8_t attrs = 0;
+        uint8_t reserved[5] = {};
 
         constexpr Cell() noexcept = default;
 
         constexpr Cell(char32_t cp, uint32_t f = COLOR_DEFAULT, uint32_t b = COLOR_DEFAULT,
                        int w = 0, bool cont = false, uint8_t att = 0) noexcept
             : grapheme(cp, w > 0 ? w : (cp == 0 ? 0 : 1)), ch(cp), fg(f), bg(b),
-              width(w > 0 ? w : (cp == 0 ? 0 : 1)), continuation(cont), attrs(att)
+              width(static_cast<uint8_t>(w > 0 ? w : (cp == 0 ? 0 : 1))), continuation(cont), attrs(att)
         {}
 
         constexpr Cell(Grapheme g, uint32_t f = COLOR_DEFAULT, uint32_t b = COLOR_DEFAULT,
@@ -50,7 +51,7 @@ namespace koto {
 
         constexpr Cell(Grapheme g, uint32_t f, uint32_t b, int w,
                        bool cont = false, uint8_t att = 0) noexcept
-            : grapheme(g), ch(g.base_cp), fg(f), bg(b), width(w), continuation(cont), attrs(att)
+            : grapheme(g), ch(g.base_cp), fg(f), bg(b), width(static_cast<uint8_t>(w > 0 ? w : 1)), continuation(cont), attrs(att)
         {
             grapheme.width = static_cast<uint8_t>(w > 0 ? w : 1);
         }
@@ -69,5 +70,7 @@ namespace koto {
 
         bool operator==(const Cell&) const = default;
     };
+
+    static_assert(sizeof(Cell) == 64, "Cell must be exactly 64 bytes (1 cache line)");
 
 }

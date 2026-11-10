@@ -119,7 +119,7 @@ namespace koto
             }
         }
 
-        c.width = w;
+        c.width = static_cast<uint8_t>(w);
         c.grapheme.width = static_cast<uint8_t>(w);
         m_back_buffer[idx] = c;
 
