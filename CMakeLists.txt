@@ -45,6 +45,13 @@ target_include_directories(koto PUBLIC
 
 target_compile_features(koto PUBLIC cxx_std_23)
 
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Work around Clang (< 19) defining __cpp_concepts=201907L which causes libstdc++
+    # headers to guard C++23 std::expected (#if __cpp_concepts >= 202002L)
+    target_compile_definitions(koto PUBLIC __cpp_concepts=202002L)
+    target_compile_options(koto PUBLIC -Wno-builtin-macro-redefined)
+endif()
+
 target_compile_options(koto PRIVATE 
     -Wall
     -Wextra
