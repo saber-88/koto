@@ -1,6 +1,7 @@
 # koto
 
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
+[![Documentation](https://img.shields.io/badge/Documentation-libkoto.workers.dev-blue.svg)](https://libkoto.karmveervaghela.workers.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-orange.svg)](https://kernel.org)
 [![Headless Tests](https://img.shields.io/badge/Headless%20Tests-37%20Passing-brightgreen.svg)]()
@@ -9,7 +10,7 @@
 
 koto is a lightweight, dependency-free C++23 Terminal User Interface (TUI) library engineered for Linux and POSIX systems. It provides differential double-buffered rendering, DEC Mode 2026 synchronized updates, deterministic input decoding, and zero-allocation frame layouts.
 
-Comprehensive architectural documentation, widget guides, and API specifications are maintained in the [`docs/`](docs/) directory.
+Comprehensive architectural documentation, interactive guides, widget references, and API specifications are available on the official documentation website: **[libkoto.karmveervaghela.workers.dev](https://libkoto.karmveervaghela.workers.dev/)**.
 
 ---
 
@@ -183,28 +184,16 @@ The repository contains standalone demo applications demonstrating individual su
 
 ---
 
-## Documentation Index
+## Documentation
 
-Detailed documentation is available in the [`docs/`](docs/) directory:
+Comprehensive documentation, tutorials, and API specifications are available at **[libkoto.karmveervaghela.workers.dev](https://libkoto.karmveervaghela.workers.dev/)**:
 
-* **Getting Started**: [`docs/getting-started.md`](docs/getting-started.md)
-* **Architecture**:
-  * [Rendering Pipeline](docs/architecture/rendering-pipeline.md)
-  * [Event Loop & Input Parsing](docs/architecture/event-loop.md)
-  * [Focus Management & Navigation](docs/architecture/focus-system.md)
-* **API Reference**:
-  * [Application Core (`koto::App`)](docs/api/app.md)
-  * [Virtual Frame & Hit-Buffer (`koto::Frame`)](docs/api/frame.md)
-  * [Layout Engine (`koto::Layout`)](docs/api/layout.md)
-  * [Terminal Abstraction (`koto::Terminal`)](docs/api/terminal.md)
-  * [Event System (`koto::Event`)](docs/api/event.md)
-  * [Color Management (`koto::Color`)](docs/api/color.md)
-* **Widget Guides**:
-  * [Box](docs/widgets/box.md), [Button](docs/widgets/button.md), [List](docs/widgets/list.md), [Tabs](docs/widgets/tabs.md), [Text](docs/widgets/text.md), [TextArea](docs/widgets/text-area.md), [TextInput](docs/widgets/text-input.md), [Gauge](docs/widgets/gauge.md), [Sparkline](docs/widgets/sparkline.md), [Rule](docs/widgets/rule.md)
-* **Technical Guides**:
-  * [Unicode & CJK Handling](docs/etc/unicode-handling.md)
-  * [Performance Optimization](docs/etc/performance-guide.md)
-  * [Troubleshooting & Terminal Compatibility](docs/etc/troubleshooting.md)
+* **[Getting Started](https://libkoto.karmveervaghela.workers.dev/getting-started/installation/)**: System requirements, CMake integration (`FetchContent` and `find_package`), and first app walkthrough.
+* **[Concepts & Architecture](https://libkoto.karmveervaghela.workers.dev/concepts/immediate-mode/)**: Immediate-mode design, DEC Mode 2026 synchronized updates, differential rendering, and 2D spatial focus routing.
+* **[Widget Catalog](https://libkoto.karmveervaghela.workers.dev/widgets/box/)**: Guides, properties, and examples for all 14 built-in widgets (`Box`, `Button`, `Fill`, `Gauge`, `HBox`, `List`, `Rule`, `Sparkline`, `Tabs`, `TextArea`, `TextInput`, `Text`, `VBox`, `Clear`).
+* **[Guides & Recipes](https://libkoto.karmveervaghela.workers.dev/guides/headless-testing/)**: Headless unit testing in CI, keyboard/mouse input decoding, modal dialog traps, and Unicode 15 / CJK IME alignment.
+* **[Deep Dives](https://libkoto.karmveervaghela.workers.dev/deep-dives/performance/)**: 64-byte cache-line `Cell` layout, small buffer optimization (SBO), zero-byte clean frames, and terminal troubleshooting.
+* **[API Reference](https://libkoto.karmveervaghela.workers.dev/api/app/)**: Header-by-header API documentation for `App`, `Frame`, `Layout`, `FocusManager`, `Terminal`, `Id`, and `Event`.
 
 ---
 
