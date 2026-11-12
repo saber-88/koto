@@ -14,23 +14,15 @@ The look follows the zkPass style reference: near-black canvas, a single signal-
 
 After changing the theme, delete `.astro/` and `dist/` before rebuilding. A stale cache can leave pages pointing at a stylesheet hash that no longer exists.
 
-## The docs are tested
+## Validating the docs
 
-Every C++ code block under `src/content/docs` is compiled against the library, and blocks marked `render="WxH"` are executed headlessly so their output is generated, not typed.
+Run the build and internal link checker:
 
 ```bash
-python3 tools/snippets.py check             # compile every cpp block
-python3 tools/snippets.py render            # regenerate all "Output" blocks in place
-python3 tools/snippets.py render --verify   # fail if any output block is stale
-python3 tools/check-links.py dist --base /koto   # after `npm run build`
+npm run build
+python3 tools/check-links.py dist
 npm run check                                # all of the above
 ```
-
-The tool finds the library at `../` (this site lives in `<repo>/docs`) or at `--koto PATH` / `$KOTO_DIR`. Set `CXX` to pick a compiler (default `g++`).
-
-Fence meta understood after the language: `render="40x6"` (run in a 40-column by 6-row frame and embed output) and `skip` (do not compile; use sparingly).
-
-A cpp block without `int main` is compiled inside a function that provides `App& app`, `FocusManager& fm`, `Frame& frame`, and any undeclared `*_area` name as an `Area`. A block with `int main` is a complete program and is compiled with strict warnings (`-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror`).
 
 ## Adding a page
 

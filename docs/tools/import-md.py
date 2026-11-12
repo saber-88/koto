@@ -16,7 +16,7 @@ What it does to the file, and nothing else:
 
 It never overwrites an existing page unless you pass --force. Afterwards:
   npm run dev                                   # look at it
-  python3 tools/snippets.py check               # do its C++ blocks still compile?
+  npm run build                                 # test the build
 """
 import argparse, posixpath, re, sys
 from pathlib import Path
