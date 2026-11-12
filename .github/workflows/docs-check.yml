@@ -1,0 +1,31 @@
+name: docs-check
+
+# Assumes this site lives in <koto-repo>/docs. Adjust `working-directory` and the koto path if you move it.
+on:
+  push:
+    paths: ['docs/**', 'include/**', 'src/**']
+  pull_request:
+    paths: ['docs/**', 'include/**', 'src/**']
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: docs/package-lock.json }
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y g++-13
+      - run: npm ci
+      - name: Every C++ example compiles against the library
+        run: python3 tools/snippets.py check
+        env: { CXX: g++-13 }
+      - name: Every rendered output block is current
+        run: python3 tools/snippets.py render --verify
+        env: { CXX: g++-13 }
+      - run: npm run build
+      - name: No broken internal links
+        run: python3 tools/check-links.py dist

@@ -3,3 +3,11 @@
 /build_debug
 *.zip
 
+# Documentation site build artifacts
+docs/dist/
+docs/node_modules/
+docs/.astro/
+docs/tools/.cache/
+docs/tools/__pycache__/
+*.gch
+

@@ -1,0 +1,92 @@
+---
+title: libkoto
+description: A modern C++23 terminal UI library. Immediate-mode, cell-diffed rendering, no dependencies.
+template: splash
+editUrl: false
+---
+
+<section class="koto-hero not-content">
+  <p class="stamp">[ C++23 · Terminal UI library ]</p>
+  <p class="display" aria-hidden="true">Terminal interfaces, <em>drawn every frame.</em></p>
+  <p class="lede">You describe the whole screen from your own state. koto works out which cells changed and writes only those. No widget tree, no dependencies, one CMake target.</p>
+  <div class="cta">
+    <a class="koto-btn koto-btn--fill" href="/getting-started/installation/">Get started</a>
+    <a class="koto-btn koto-btn--line" href="/getting-started/first-app/">Build your first app</a>
+  </div>
+</section>
+
+<div class="neon-bar" role="presentation"></div>
+
+<div class="koto-proof not-content">
+  <p class="stamp" style="margin:0">[ Proof · A dashboard in 12 lines ]</p>
+  <span class="pill">✓ Compiled &amp; rendered</span>
+</div>
+
+```cpp title="dashboard.cpp" render="60x12"
+ListState hosts({"alpha", "beta", "gamma"});
+hosts.set_selected(1);
+std::vector<uint64_t> load = {2, 4, 3, 6, 8, 7, 5, 9, 6, 4, 7, 10};
+
+auto [left, right] = Layout::horizontal<2>(frame.area(), {Constraint::percent(35), Constraint::fill()});
+List(hosts).title("Hosts").highlight_symbol("> ").border_style(BorderStyle::Rounded).draw(frame, left);
+
+auto [top, bottom] = Layout::vertical<2>(right, {Constraint::fixed(3), Constraint::fill()});
+Box().title("CPU").border_style(BorderStyle::Rounded).draw(frame, top);
+Gauge().percent(64).label("64%").draw(frame, top.inset(1, 1, 1, 1));
+Box().title("Load").border_style(BorderStyle::Rounded).draw(frame, bottom);
+Sparkline().data(load).draw(frame, bottom.inset(1, 1, 1, 1));
+```
+
+```text frame="terminal" title="Output"
+╭─ Hosts ───────────╮╭──────────────── CPU ────────────────╮
+│  alpha            ││█████████████████64%███▋             │
+│> beta             │╰─────────────────────────────────────╯
+│  gamma            │╭─────────────── Load ────────────────╮
+│                   ││                                     │
+│                   ││                                     │
+│                   ││                                     │
+│                   ││                                     │
+│                   ││                                     │
+│                   ││                                     │
+│                   ││                         ▂▄▃▅▇▆▅█▅▄▆█│
+╰───────────────────╯╰─────────────────────────────────────╯
+```
+
+The output above is not a mockup. It was produced by compiling and running that code against the library, and the build of this site fails if it goes stale.
+
+<section class="koto-section not-content">
+  <p class="stamp">[ Why koto ]</p>
+  <h2>Small surface, <em>no surprises.</em></h2>
+  <div class="koto-grid">
+    <div class="koto-card">
+      <p class="stamp"><span>Rendering</span><span>01</span></p>
+      <h3>No widget tree</h3>
+      <p>State lives in your variables. Widgets are cheap values you draw each frame, so there is nothing to keep in sync.</p>
+      <a href="/concepts/immediate-mode/">Immediate mode →</a>
+    </div>
+    <div class="koto-card">
+      <p class="stamp"><span>Output</span><span>02</span></p>
+      <h3>Only what changed</h3>
+      <p>A double-buffered diff renderer writes changed cells inside a synchronized update, so frames are minimal and tear-free where supported.</p>
+      <a href="/concepts/frames-diff-renderer/">The renderer →</a>
+    </div>
+    <div class="koto-card">
+      <p class="stamp"><span>Input</span><span>03</span></p>
+      <h3>Mouse and focus built in</h3>
+      <p>Every drawn cell carries an id, so clicks resolve to widgets, focus follows the mouse, and modal dialogs trap Tab.</p>
+      <a href="/concepts/ids-hit-buffer/">Hit buffer →</a>
+    </div>
+    <div class="koto-card">
+      <p class="stamp"><span>Quality</span><span>04</span></p>
+      <h3>Testable without a terminal</h3>
+      <p>Draw into an in-memory frame and assert on plain text. Every example in these docs is tested that way.</p>
+      <a href="/guides/headless-testing/">Headless testing →</a>
+    </div>
+  </div>
+</section>
+
+<section class="koto-section not-content">
+  <p class="stamp">[ Next ]</p>
+  <h2>Ship a terminal app <em>today.</em></h2>
+  <p>Read <a href="/getting-started/requirements/">Requirements</a>, then <a href="/getting-started/installation/">Installation</a>. The <a href="/widgets/box/">widget reference</a> covers everything that ships: Box, Text, List, Tabs, Button, TextInput, TextArea, Gauge, Sparkline, Rule, Fill, Clear, Vbox and Hbox. koto targets Linux and needs GCC 13+ or Clang 16+; see <a href="/limitations-faq/">Limitations &amp; FAQ</a> for what it does not do.</p>
+</section>

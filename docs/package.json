@@ -1,0 +1,30 @@
+{
+  "name": "libkoto-docs",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "check:snippets": "python3 tools/snippets.py check",
+    "render:snippets": "python3 tools/snippets.py render",
+    "check:links": "python3 tools/check-links.py dist",
+    "check": "npm run check:snippets && python3 tools/snippets.py render --verify && npm run build && npm run check:links"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.5",
+    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/starlight": "^0.42.8",
+    "@fontsource-variable/inter-tight": "^5.3.0",
+    "@fontsource-variable/source-serif-4": "^5.3.1",
+    "astro": "7.4.0",
+    "astro-mermaid": "^2.2.0",
+    "mermaid": "^12.3.0"
+  }
+}

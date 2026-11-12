@@ -1,0 +1,34 @@
+---
+// Page title with a "[ SECTION ]" eyebrow, in the zkPass metadata-stamp style.
+// The landing page draws its own display headline, so it only gets a visually hidden <h1>.
+const PAGE_TITLE_ID = '_top'; // the id Starlight's table of contents and skip-link target
+
+const { entry } = Astro.locals.starlightRoute;
+const title = entry.data.title;
+const slug: string = entry.id;
+const sections: Record<string, string> = {
+  'getting-started': 'Getting started',
+  concepts: 'Concepts',
+  architecture: 'Architecture',
+  'deep-dives': 'Deep dives',
+  guides: 'Guides',
+  widgets: 'Widgets',
+  api: 'API reference',
+  'limitations-faq': 'Reference',
+  changelog: 'Reference',
+};
+const first = slug.split('/')[0] ?? '';
+const section = sections[first];
+const isHome = slug === 'index' || slug === '';
+---
+
+{
+  isHome ? (
+    <h1 id={PAGE_TITLE_ID} class="sr-only">{title}</h1>
+  ) : (
+    <>
+      {section && <p class="eyebrow">[ {section} ]</p>}
+      <h1 id={PAGE_TITLE_ID}>{title}</h1>
+    </>
+  )
+}
