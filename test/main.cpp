@@ -252,9 +252,9 @@ int main()
         int secs = static_cast<int>(anim_time) % 60;
         int tenths = static_cast<int>(anim_time * 10.0) % 10;
 
-        char time_buf[16];
+        char time_buf[64];
         std::snprintf(time_buf, sizeof(time_buf), "%02d:%02d.%d", mins, secs, tenths);
-        char fps_buf[16];
+        char fps_buf[64];
         std::snprintf(fps_buf, sizeof(fps_buf), "%.1f FPS", rolling_fps);
 
         Box()
