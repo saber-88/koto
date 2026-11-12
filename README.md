@@ -1,7 +1,7 @@
 # koto
 
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
-[![Documentation](https://img.shields.io/badge/Documentation-libkoto.workers.dev-blue.svg)](https://libkoto.karmveervaghela.workers.dev/)
+[![Documentation](https://img.shields.io/badge/Documentation-koto.workers.dev-blue.svg)](https://koto.karmveervaghela.workers.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-orange.svg)](https://kernel.org)
 [![Headless Tests](https://img.shields.io/badge/Headless%20Tests-37%20Passing-brightgreen.svg)]()
@@ -10,7 +10,7 @@
 
 koto is a lightweight, dependency-free C++23 Terminal User Interface (TUI) library engineered for Linux and POSIX systems. It provides differential double-buffered rendering, DEC Mode 2026 synchronized updates, deterministic input decoding, and zero-allocation frame layouts.
 
-Comprehensive architectural documentation, interactive guides, widget references, and API specifications are available on the official documentation website: **[libkoto.karmveervaghela.workers.dev](https://libkoto.karmveervaghela.workers.dev/)**.
+Comprehensive architectural documentation, interactive guides, widget references, and API specifications are available on the official documentation website: **[koto.karmveervaghela.workers.dev](https://koto.karmveervaghela.workers.dev/)**.
 
 ---
 
@@ -186,14 +186,14 @@ The repository contains standalone demo applications demonstrating individual su
 
 ## Documentation
 
-Comprehensive documentation, tutorials, and API specifications are available at **[libkoto.karmveervaghela.workers.dev](https://libkoto.karmveervaghela.workers.dev/)**:
+Comprehensive documentation, tutorials, and API specifications are available at **[koto.karmveervaghela.workers.dev](https://koto.karmveervaghela.workers.dev/)**:
 
-* **[Getting Started](https://libkoto.karmveervaghela.workers.dev/getting-started/installation/)**: System requirements, CMake integration (`FetchContent` and `find_package`), and first app walkthrough.
-* **[Concepts & Architecture](https://libkoto.karmveervaghela.workers.dev/concepts/immediate-mode/)**: Immediate-mode design, DEC Mode 2026 synchronized updates, differential rendering, and 2D spatial focus routing.
-* **[Widget Catalog](https://libkoto.karmveervaghela.workers.dev/widgets/box/)**: Guides, properties, and examples for all 14 built-in widgets (`Box`, `Button`, `Fill`, `Gauge`, `HBox`, `List`, `Rule`, `Sparkline`, `Tabs`, `TextArea`, `TextInput`, `Text`, `VBox`, `Clear`).
-* **[Guides & Recipes](https://libkoto.karmveervaghela.workers.dev/guides/headless-testing/)**: Headless unit testing in CI, keyboard/mouse input decoding, modal dialog traps, and Unicode 15 / CJK IME alignment.
-* **[Deep Dives](https://libkoto.karmveervaghela.workers.dev/deep-dives/performance/)**: 64-byte cache-line `Cell` layout, small buffer optimization (SBO), zero-byte clean frames, and terminal troubleshooting.
-* **[API Reference](https://libkoto.karmveervaghela.workers.dev/api/app/)**: Header-by-header API documentation for `App`, `Frame`, `Layout`, `FocusManager`, `Terminal`, `Id`, and `Event`.
+* **[Getting Started](https://koto.karmveervaghela.workers.dev/getting-started/installation/)**: System requirements, CMake integration (`FetchContent` and `find_package`), and first app walkthrough.
+* **[Concepts & Architecture](https://koto.karmveervaghela.workers.dev/concepts/immediate-mode/)**: Immediate-mode design, DEC Mode 2026 synchronized updates, differential rendering, and 2D spatial focus routing.
+* **[Widget Catalog](https://koto.karmveervaghela.workers.dev/widgets/box/)**: Guides, properties, and examples for all 14 built-in widgets (`Box`, `Button`, `Fill`, `Gauge`, `HBox`, `List`, `Rule`, `Sparkline`, `Tabs`, `TextArea`, `TextInput`, `Text`, `VBox`, `Clear`).
+* **[Guides & Recipes](https://koto.karmveervaghela.workers.dev/guides/headless-testing/)**: Headless unit testing in CI, keyboard/mouse input decoding, modal dialog traps, and Unicode 15 / CJK IME alignment.
+* **[Deep Dives](https://koto.karmveervaghela.workers.dev/deep-dives/performance/)**: 64-byte cache-line `Cell` layout, small buffer optimization (SBO), zero-byte clean frames, and terminal troubleshooting.
+* **[API Reference](https://koto.karmveervaghela.workers.dev/api/app/)**: Header-by-header API documentation for `App`, `Frame`, `Layout`, `FocusManager`, `Terminal`, `Id`, and `Event`.
 
 ---
 

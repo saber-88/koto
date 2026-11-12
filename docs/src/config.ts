@@ -50,7 +50,7 @@ export const config: KotoConfig = {
   repoUrl,
   editUrl: (env.EDIT_URL || `${repoUrl}/edit/main/docs/src/content/docs/`).replace(/\/*$/, '/'),
   version: '1.0.0',
-  site: (env.SITE_URL || env.URL || 'https://saber-88.github.io').replace(/\/+$/, ''),
+  site: (env.SITE_URL || env.URL || 'https://koto.karmveervaghela.workers.dev').replace(/\/+$/, ''),
   base,
   basePrefix: base === '/' ? '' : base,
 };

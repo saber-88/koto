@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "libkoto",
+  "name": "koto",
   "compatibility_date": "2026-11-12",
   "assets": {
     "directory": "./dist"

@@ -139,3 +139,26 @@ if(KOTO_BUILD_TESTS)
     add_test(NAME headless_regressions COMMAND test_headless_regressions)
     add_test(NAME cjk_emoji_tests COMMAND test8_text_cjk_emoji)
 endif()
+
+# Packaging with CPack
+set(CPACK_PACKAGE_NAME "koto")
+set(CPACK_PACKAGE_VENDOR "Karmveer Vaghela")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A lightweight, dependency-free C++23 Terminal User Interface (TUI) library")
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")
+set(CPACK_SOURCE_IGNORE_FILES
+    "/build/"
+    "/build_debug/"
+    "/.git/"
+    "/.cache/"
+    "/docs/node_modules/"
+    "/docs/.astro/"
+    "/docs/dist/"
+)
+set(CPACK_GENERATOR "TGZ")
+include(CPack)
+
