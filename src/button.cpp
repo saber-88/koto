@@ -113,13 +113,15 @@ namespace koto
 
     void Button::draw(Frame& frame, Area area)
     {
+        Id effective_id = m_id;
         if (m_fm != nullptr && !m_id.is_none())
         {
+            effective_id = m_fm->scoped_id(m_id);
             if (m_on_click)
             {
                 Id current_modal = m_fm->active_modal_scope();
                 FocusTarget target{
-                    .id = m_fm->scoped_id(m_id),
+                    .id = effective_id,
                     .bounds = area,
                     .modal_scope = current_modal,
                     .enabled = true,
@@ -162,7 +164,7 @@ namespace koto
             .border_style(m_border_style)
             .fg(border_col)
             .bg(bg_col)
-            .id(m_id)
+            .id(effective_id)
             .focused(m_is_focused)
             .focused_border_fg(m_focused_border_fg)
             .filled(true)
