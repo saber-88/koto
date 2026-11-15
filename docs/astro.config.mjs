@@ -42,6 +42,7 @@ export default defineConfig({
         },
         { tag: 'meta', attrs: { name: 'twitter:image', content: ogImage } },
         { tag: 'meta', attrs: { name: 'theme-color', content: '#0f1217' } },
+        { tag: 'meta', attrs: { name: 'google-site-verification', content: 'xavozaBegg7UHQFFoOAx0uJFLRu7o8uVzC78_oIrRWg' } },
         { tag: 'meta', attrs: { name: 'color-scheme', content: 'light dark' } },
         {
           tag: 'link',
